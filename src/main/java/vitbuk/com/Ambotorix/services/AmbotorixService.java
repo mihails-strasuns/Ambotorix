@@ -16,6 +16,7 @@ import org.telegram.telegrambots.meta.api.objects.message.Message;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
+import vitbuk.com.Ambotorix.PickImageGenerator;
 import vitbuk.com.Ambotorix.commands.*;
 import vitbuk.com.Ambotorix.commands.structure.AdminCommand;
 import vitbuk.com.Ambotorix.commands.structure.Command;
@@ -834,12 +835,44 @@ public class    AmbotorixService {
     }
 
     private void finalizeHerson(Long chatId, Lobby lobby, Map<String, Leader> assignments) {
-        // Reuse pendingPicks for the reveal so the status message renders the final assignment.
-        lobby.getPendingPicks().clear();
-        assignments.forEach(lobby::addPendingPick);
         lobby.setDraftInProgress(false);
+        // The status closes out (done + contested-ban summary) without listing picks — the reveal is a
+        // portrait image instead, one row per player with just their assigned leader.
         refreshStatus(chatId);
-        postMilestone(chatId, "🎉 Draft resolved! See the reveal ☝️");
+        postHersonReveal(chatId, lobby, assignments);
+    }
+
+    /** Reveal the resolved draft as a combined portrait image — a row per player with their one civ. */
+    private void postHersonReveal(Long chatId, Lobby lobby, Map<String, Leader> assignments) {
+        List<Player> order = (lobby.getSlotOrder() != null && !lobby.getSlotOrder().isEmpty())
+                ? lobby.getSlotOrder() : lobby.getPlayers();
+        List<Player> rows = new ArrayList<>();
+        for (Player p : order) {
+            Leader civ = assignments.get(p.getUserName());
+            if (civ == null) continue;
+            Player row = new Player(p.getUserName(), p.getUserId());
+            row.setPicks(List.of(civ));
+            rows.add(row);
+        }
+        try {
+            PickImageGenerator.LeaderPickPhoto reveal = PickImageGenerator.createCombinedPickMessage(chatId, rows);
+            File file = reveal.tempFile();
+            try {
+                reveal.sendPhoto().setMessageThreadId(lobby.getMessageThreadId());
+                reveal.sendPhoto().setParseMode("HTML");
+                reveal.sendPhoto().setReplyToMessageId(lobby.getStatusMessageId());
+                reveal.sendPhoto().setCaption("🎉 Draft resolved! " + mentionAll(lobby));
+                telegramClient.execute(reveal.sendPhoto());
+            } finally {
+                file.delete();
+            }
+        } catch (Exception e) {
+            log.error("Failed to post Herson reveal image for chat {}", chatId, e);
+            // Fall back to a text reveal so players still see the result.
+            postMilestone(chatId, "🎉 Draft resolved!\n" + assignments.entrySet().stream()
+                    .map(en -> "@" + en.getKey() + " → " + en.getValue().getFullName())
+                    .collect(Collectors.joining("\n")));
+        }
     }
 
     private String numberedPicks(List<Leader> picks) {
@@ -1227,7 +1260,8 @@ public class    AmbotorixService {
             if (lobby.getHersonState() != null && lobby.getHersonState().anyAwaitingRepick()) {
                 sb.append("\nResolving — awaiting a coin-flip re-pick…");
             }
-        } else if (!lobby.getPendingPicks().isEmpty()) {
+        } else if (!herson && !lobby.getPendingPicks().isEmpty()) {
+            // Herson reveals picks as a portrait image, not in the status.
             sb.append("\n\n<b>Picks:</b>");
             for (Map.Entry<String, Leader> e : lobby.getPendingPicks().entrySet()) {
                 sb.append("\n@").append(e.getKey()).append(" → ").append(e.getValue().getFullName());

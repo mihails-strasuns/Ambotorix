@@ -37,6 +37,6 @@ ambotorix: *Picks recorded*
 
 --- CHAT ---
 ambotorix: 📥 All picks are in* <backlink>
-ambotorix: 🎉 Draft resolved!* <backlink>
-ambotorix: <status *Status: done*Picks:*@{player} → {leader}*@{player} → {leader}*>
-ambotorix:                              # group stream held exactly the three milestones
+ambotorix: <image *resolved*> <backlink>   # reveal is a portrait image (one civ per player)
+ambotorix: <status *Status: done*Draft: herson*>   # status closes out without listing picks
+ambotorix:                              # group stream held the start ping, the all-in note, the reveal

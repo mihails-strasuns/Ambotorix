@@ -103,8 +103,10 @@ Strategy pattern. `DraftStrategy` implementations are `@Component`s collected by
   `HersonResolver` collapses the ranked lists into a unique assignment: a civ wanted by 2+ players is
   banned and the contestants fall through to their next pick; a clash that survives all four picks is
   broken by a **coin flip** (winner keeps it, the loser is DM'd to re-pick from the remaining pool).
-  Picks stay hidden until fully resolved, then the status reveals each player's civ plus a
-  **contested-ban summary** (which civs were banned and who had ranked them, at what priority). The
+  Picks stay hidden until fully resolved, then the result is revealed as a **portrait image** (via
+  `PickImageGenerator`, one row per player with just their assigned leader) and the status closes out
+  with a **contested-ban summary** (which civs were banned and who had ranked them, at what priority).
+  The
   strategy itself is just the kickoff hook — the DM submission flow, confirm/re-pick handling and
   resolution orchestration live on `AmbotorixService`, and all per-lobby Herson state (ranked picks,
   per-player stage, resolver bans, assignments) lives in `HersonDraftState` on the `Lobby`.

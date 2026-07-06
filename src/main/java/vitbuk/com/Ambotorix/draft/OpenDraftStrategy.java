@@ -13,6 +13,7 @@ import vitbuk.com.Ambotorix.services.LeaderService;
 import vitbuk.com.Ambotorix.services.MarkupService;
 
 import java.io.File;
+import java.util.List;
 
 @Component
 public class OpenDraftStrategy implements DraftStrategy {
@@ -35,11 +36,16 @@ public class OpenDraftStrategy implements DraftStrategy {
     public void execute(Lobby lobby, Long chatId, AmbotorixService service) {
         leaderService.setLeadersPool(lobby);
 
+        // Render pools in slot order (the drafting order), not registration order. Slot order is
+        // fixed just before this in sendStart; fall back to registration order if it's somehow unset.
+        List<Player> orderedPlayers = (lobby.getSlotOrder() != null && !lobby.getSlotOrder().isEmpty())
+                ? lobby.getSlotOrder() : lobby.getPlayers();
+
         // Public group post: one combined image — a row per player — instead of a post per player.
         // It is the single draft-start ping: posted as a reply to the status message and captioned
         // with @-mentions so every player is notified. The image itself shows each player's pool.
         PickImageGenerator.LeaderPickPhoto combined =
-                PickImageGenerator.createCombinedPickMessage(chatId, lobby.getPlayers());
+                PickImageGenerator.createCombinedPickMessage(chatId, orderedPlayers);
         File combinedFile = combined.tempFile();
         try {
             combined.sendPhoto().setMessageThreadId(lobby.getMessageThreadId());
@@ -55,7 +61,7 @@ public class OpenDraftStrategy implements DraftStrategy {
         }
 
         // DM each reachable player their own pool with description buttons — non-fatal if it fails.
-        for (Player player : lobby.getPlayers()) {
+        for (Player player : orderedPlayers) {
             if (player.getUserId() == null) {
                 log.warn("No userId for player {}, skipping DM", player.getUserName());
                 continue;

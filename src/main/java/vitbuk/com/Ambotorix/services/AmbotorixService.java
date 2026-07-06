@@ -187,6 +187,9 @@ public class    AmbotorixService {
             }
         }
 
+        // Roll the map up front so it's known before anyone bans or picks — it informs the draft.
+        lobbyService.rollMap(chatId);
+
         // Fresh lobby: instead of a throwaway "created" line, post the single live status message
         // that we keep edited for the rest of the session.
         postStatus(chatId);
@@ -548,10 +551,14 @@ public class    AmbotorixService {
         lobby.setDraftInProgress(true);
         lobby.setDraftStartedAt(LocalDateTime.now());
         try {
-            // Fix the random slot order and map, fold them into the status message, and announce the
+            // Fix the random slot order, fold it into the status message, and announce the
             // milestone with a single mention that backlinks (replies) to the status message.
+            // The map was already rolled at lobby creation; only roll now if the pool was empty
+            // then and has since been filled.
             lobby.setSlotOrder(lobbyService.randomSlotOrder(chatId));
-            lobby.setSelectedMap(lobbyService.randomMap(chatId));
+            if (lobby.getSelectedMap() == null) {
+                lobbyService.rollMap(chatId);
+            }
             // Slot order and map fold into the status message silently. The single group ping is
             // owned by the strategy: open posts the picks image (a reply to status), secret posts
             // a tag reply — both tag players, so there's no separate "draft started" line.
@@ -990,6 +997,7 @@ public class    AmbotorixService {
             sendPrivateMessage(update, civMap + " is already in the map pool.");
             return;
         }
+        lobbyService.ensureSelectedMap(chatId);
         refreshStatus(chatId);
     }
 
@@ -1005,6 +1013,7 @@ public class    AmbotorixService {
             sendMessage(update, civMap + " is already in the map pool.");
             return;
         }
+        lobbyService.ensureSelectedMap(lobbyChatId);
         refreshStatus(lobbyChatId);
         sendMessage(update, "✅ Added " + civMap + " to the map pool.");
     }
@@ -1019,6 +1028,7 @@ public class    AmbotorixService {
 
         Long chatId = extractChatIdLong(update);
         if (lobbyService.removeMap(chatId, civMap)) {
+            lobbyService.ensureSelectedMap(chatId);
             refreshStatus(chatId);
             return;
         }
@@ -1033,6 +1043,7 @@ public class    AmbotorixService {
             sendPrivateMessage(update, civMap + " is not in the map pool.");
             return;
         }
+        lobbyService.ensureSelectedMap(lobbyChatId);
         refreshStatus(lobbyChatId);
         sendPrivateMessage(update, "✅ Removed " + civMap + " from the map pool.");
     }
@@ -1199,12 +1210,13 @@ public class    AmbotorixService {
             sb.append("\nPick size: ").append(lobby.getPickSize())
                     .append("\nBans per player: ").append(lobby.getBanSize());
         }
+        // The map is rolled up front (at lobby creation), so surface it from the start. During setup
+        // also show the pool it was drawn from, since the host can still add/remove maps.
+        sb.append("\nMap: ").append(lobby.getSelectedMap() == null ? "—" : lobby.getSelectedMap().toString());
         if (!lobby.isDraftStarted()) {
             String mapList = lobby.getMapPool().isEmpty() ? "none"
                     : lobby.getMapPool().stream().map(CivMap::toString).collect(Collectors.joining(", "));
             sb.append("\nMap pool: ").append(mapList);
-        } else {
-            sb.append("\nMap: ").append(lobby.getSelectedMap() == null ? "—" : lobby.getSelectedMap().toString());
         }
 
         sb.append("\n\n<b>Players (").append(lobby.getPlayers().size()).append("):</b> ").append(playerList);

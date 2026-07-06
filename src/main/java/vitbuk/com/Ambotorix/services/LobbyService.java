@@ -172,4 +172,32 @@ public class LobbyService {
         Collections.shuffle(mapPool);
         return mapPool.get(0);
     }
+
+    /**
+     * Fix a random map from the current pool as the lobby's selected map (null if the pool is empty).
+     * Rolled up front — before bans/picks — so players know the map while they draft.
+     */
+    public CivMap rollMap(Long chatId) {
+        Lobby lobby = lobbies.get(chatId);
+        if (lobby == null) return null;
+        List<CivMap> pool = lobby.getMapPool();
+        // Pick without shuffling the pool in place, so its displayed order stays stable.
+        CivMap map = pool.isEmpty() ? null : pool.get(new Random().nextInt(pool.size()));
+        lobby.setSelectedMap(map);
+        return map;
+    }
+
+    /**
+     * Keep the selected map consistent with the pool after an edit, before the draft starts:
+     * roll a fresh one only if none is set yet or the current pick was removed from the pool.
+     * Leaves an already-valid selection untouched so adding/removing other maps doesn't reshuffle it.
+     */
+    public void ensureSelectedMap(Long chatId) {
+        Lobby lobby = lobbies.get(chatId);
+        if (lobby == null || lobby.isDraftStarted()) return;
+        CivMap current = lobby.getSelectedMap();
+        if (current == null || !lobby.getMapPool().contains(current)) {
+            rollMap(chatId);
+        }
+    }
 }

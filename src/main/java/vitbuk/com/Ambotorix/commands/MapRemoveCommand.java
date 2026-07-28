@@ -1,7 +1,7 @@
 package vitbuk.com.Ambotorix.commands;
 
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.objects.Update;
+import vitbuk.com.Ambotorix.commands.structure.CommandContext;
 import vitbuk.com.Ambotorix.commands.structure.CommandInfo;
 import vitbuk.com.Ambotorix.commands.structure.DynamicCommand;
 import vitbuk.com.Ambotorix.commands.structure.HostCommand;
@@ -22,16 +22,12 @@ public class MapRemoveCommand implements HostCommand, DynamicCommand {
     }
 
     @Override
-    public void execute(Update update, AmbotorixService ambotorixService) {
-        String[] parts = update.getMessage().getText().trim().split("[\\s_]+", 2);
-        String mapName = parts[1].trim();
-        Optional<CivMap> maybeMap = CivMap.fromDisplayNameIgnoreCase(mapName);
-
+    public void execute(CommandContext ctx, AmbotorixService service) {
+        Optional<CivMap> maybeMap = CivMap.fromDisplayNameIgnoreCase(ctx.args());
         if (maybeMap.isEmpty()) {
-            ambotorixService.sendNoSuchMap(update);
+            service.sendNoSuchMap(ctx);
             return;
         }
-
-        ambotorixService.sendMapRemove(update, maybeMap.get());
+        service.sendMapRemove(ctx.event(), maybeMap.get());
     }
 }

@@ -1,7 +1,7 @@
 package vitbuk.com.Ambotorix.commands;
 
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.objects.Update;
+import vitbuk.com.Ambotorix.commands.structure.CommandContext;
 import vitbuk.com.Ambotorix.commands.structure.CommandInfo;
 import vitbuk.com.Ambotorix.commands.structure.DynamicCommand;
 import vitbuk.com.Ambotorix.commands.structure.GeneralCommand;
@@ -19,10 +19,7 @@ public class DescriptionCommand implements GeneralCommand, DynamicCommand {
     }
 
     @Override
-    public void execute(Update update, AmbotorixService ambotorixService) {
-        String messageText = update.getMessage().getText().replace("_", "");
-        String shortName = messageText.substring(getInfo().prefix().length()).trim();
-
-        ambotorixService.sendDescription(update, shortName);
+    public void execute(CommandContext ctx, AmbotorixService service) {
+        service.sendDescription(ctx.event(), ctx.args());
     }
 }

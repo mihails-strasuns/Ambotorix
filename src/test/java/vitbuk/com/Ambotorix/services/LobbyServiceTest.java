@@ -2,6 +2,7 @@ package vitbuk.com.Ambotorix.services;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import vitbuk.com.Ambotorix.chat.ChatRef;
 import vitbuk.com.Ambotorix.entities.CivMap;
 import vitbuk.com.Ambotorix.entities.Lobby;
 import vitbuk.com.Ambotorix.entities.Player;
@@ -10,9 +11,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class LobbyServiceTest {
 
+    /** Lobbies are addressed by a platform-qualified channel, not a bare id. */
+    private static ChatRef chat(long chatId) {
+        return ChatRef.telegram(chatId, null);
+    }
+
+
     private LobbyService service;
-    private static final Long CHAT_A = 100L;
-    private static final Long CHAT_B = 200L;
+    private static final ChatRef CHAT_A = chat(100L);
+    private static final ChatRef CHAT_B = chat(200L);
 
     @BeforeEach
     void setUp() {
@@ -81,12 +88,12 @@ class LobbyServiceTest {
     }
 
     @Test
-    void getExpiredLobbyChatIds_returnsChatsWhoseStartExceededTimeout() {
+    void getExpiredLobbyChats_returnsChatsWhoseStartExceededTimeout() {
         service.createLobby(CHAT_A, new Player("host", 1L));
         Lobby lobby = service.getLobby(CHAT_A);
         lobby.setDraftStartedAt(java.time.LocalDateTime.now().minusMinutes(45));
 
-        var expired = service.getExpiredLobbyChatIds(30);
+        var expired = service.getExpiredLobbyChats(30);
         assertTrue(expired.contains(CHAT_A));
     }
 }

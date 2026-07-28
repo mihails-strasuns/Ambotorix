@@ -1,5 +1,8 @@
 package vitbuk.com.Ambotorix.entities;
 
+import vitbuk.com.Ambotorix.chat.ChatRef;
+import vitbuk.com.Ambotorix.chat.MessageRef;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,10 +26,12 @@ public class Lobby {
     private Map<String, Leader> pendingPicks = new LinkedHashMap<>();
     private boolean draftInProgress = false;
     private LocalDateTime draftStartedAt;
-    // Telegram forum topic (message_thread_id) the lobby lives in; null = General topic / non-forum group.
-    private Integer messageThreadId;
+    // The channel (and thread/topic within it) the lobby lives in, on whichever platform.
+    private ChatRef chat;
+    // Short opaque handle used in button payloads instead of the channel id — see LobbyService.
+    private String token;
     // The single live status message the bot keeps edited with all lobby metadata; null until posted.
-    private Integer statusMessageId;
+    private MessageRef statusMessage;
     // The randomised slot order fixed at draft start, so the status message renders it consistently.
     private List<Player> slotOrder;
     // Herson-draft bookkeeping (ranked picks + resolution state); null until a Herson draft starts.
@@ -158,11 +163,14 @@ public class Lobby {
     public void setDraftStartedAt(LocalDateTime draftStartedAt) { this.draftStartedAt = draftStartedAt; }
     public boolean isDraftStarted() { return draftStartedAt != null; }
 
-    public Integer getMessageThreadId() { return messageThreadId; }
-    public void setMessageThreadId(Integer messageThreadId) { this.messageThreadId = messageThreadId; }
+    public ChatRef getChat() { return chat; }
+    public void setChat(ChatRef chat) { this.chat = chat; }
 
-    public Integer getStatusMessageId() { return statusMessageId; }
-    public void setStatusMessageId(Integer statusMessageId) { this.statusMessageId = statusMessageId; }
+    public String getToken() { return token; }
+    public void setToken(String token) { this.token = token; }
+
+    public MessageRef getStatusMessage() { return statusMessage; }
+    public void setStatusMessage(MessageRef statusMessage) { this.statusMessage = statusMessage; }
 
     public List<Player> getSlotOrder() { return slotOrder; }
     public void setSlotOrder(List<Player> slotOrder) { this.slotOrder = slotOrder; }

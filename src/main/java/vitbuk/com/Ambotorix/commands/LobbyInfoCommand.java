@@ -1,8 +1,8 @@
 package vitbuk.com.Ambotorix.commands;
 
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.objects.Update;
 import vitbuk.com.Ambotorix.commands.structure.GeneralCommand;
+import vitbuk.com.Ambotorix.commands.structure.CommandContext;
 import vitbuk.com.Ambotorix.commands.structure.CommandInfo;
 import vitbuk.com.Ambotorix.services.AmbotorixService;
 
@@ -14,7 +14,7 @@ public class LobbyInfoCommand implements GeneralCommand {
     @Override public CommandInfo getInfo() { return INFO; }
 
     @Override
-    public void execute(Update update, AmbotorixService service) {
-        service.sendLobbyInfo(update);
+    public void execute(CommandContext ctx, AmbotorixService service) {
+        service.sendLobbyInfo(ctx);
     }
 }

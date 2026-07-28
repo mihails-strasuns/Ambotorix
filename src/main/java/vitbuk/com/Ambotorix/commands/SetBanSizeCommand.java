@@ -1,7 +1,7 @@
 package vitbuk.com.Ambotorix.commands;
 
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.objects.Update;
+import vitbuk.com.Ambotorix.commands.structure.CommandContext;
 import vitbuk.com.Ambotorix.commands.structure.CommandInfo;
 import vitbuk.com.Ambotorix.commands.structure.DynamicCommand;
 import vitbuk.com.Ambotorix.commands.structure.HostCommand;
@@ -15,13 +15,11 @@ public class SetBanSizeCommand implements HostCommand, DynamicCommand {
     @Override public CommandInfo getInfo() { return INFO; }
 
     @Override
-    public void execute(Update update, AmbotorixService service) {
-        String[] parts = update.getMessage().getText().trim().split("\\s+", 2);
+    public void execute(CommandContext ctx, AmbotorixService service) {
         try {
-            int n = Integer.parseInt(parts[1].trim());
-            service.sendSetBanSize(update, n);
+            service.sendSetBanSize(ctx, Integer.parseInt(ctx.args()));
         } catch (NumberFormatException e) {
-            service.sendMessage(update, "Invalid number: " + parts[1]);
+            service.sendMessage(ctx, "Invalid number: " + ctx.args());
         }
     }
 }

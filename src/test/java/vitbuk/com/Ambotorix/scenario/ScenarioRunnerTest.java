@@ -10,7 +10,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
-import vitbuk.com.Ambotorix.Ambotorix;
+import vitbuk.com.Ambotorix.adapters.telegram.TelegramBot;
 import vitbuk.com.Ambotorix.entities.Leader;
 import vitbuk.com.Ambotorix.harness.TestTelegramClient;
 import vitbuk.com.Ambotorix.harness.TestTelegramClient.Button;
@@ -67,7 +67,7 @@ class ScenarioRunnerTest {
 
     private static final Path SCENARIO_DIR = Path.of("src/test/resources/scenarios");
 
-    @Autowired Ambotorix ambotorix;
+    @Autowired TelegramBot ambotorix;
     @Autowired TestTelegramClient client;
     @Autowired LobbyService lobbyService;
     @Autowired LeaderService leaderService;

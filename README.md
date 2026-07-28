@@ -112,6 +112,29 @@ The bot is containerised. With Docker and a populated `.env` (bot token, usernam
 docker compose up --build -d
 ```
 
+### Running on Discord too
+
+The bot speaks Telegram and Discord from one process, with one copy of the lobby/draft logic. Discord
+is opt-in: without `discord.token` the adapter is not created and nothing changes.
+
+```properties
+discord.token=...              # enables the Discord adapter
+bot.discord-admin-id=...       # admin rights are per platform; a Telegram admin id means nothing on Discord
+```
+
+Set up the application at <https://discord.com/developers/applications>, then invite the bot with the
+`bot` and `applications.commands` scopes and these permissions: **Send Messages**, **Embed Links**,
+**Attach Files**, **Read Message History**. No privileged intents are required — commands arrive as
+slash-command interactions, and Discord always delivers message content in DMs (which is how Herson
+ranked picks are submitted).
+
+Commands register themselves as slash commands on startup, so `/lobby`, `/register`, `/ban …` behave
+the same on both platforms. Two things look different because the platforms differ, not the logic:
+the lobby status is a Discord embed, and the 89-leader pick grid becomes grouped dropdown menus
+(Discord caps a message at 25 buttons).
+
+Lobbies never span platforms — a Telegram group and a Discord channel each host their own.
+
 ### Updating data files (`mods`, `settings`, etc.) on an existing deployment
 
 `src/main/resources` is a named Docker volume that the entrypoint **only seeds on first run**

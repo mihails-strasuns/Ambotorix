@@ -1,6 +1,7 @@
 package vitbuk.com.Ambotorix.draft;
 
 import org.springframework.stereotype.Component;
+import vitbuk.com.Ambotorix.chat.ChatRef;
 import vitbuk.com.Ambotorix.entities.Lobby;
 import vitbuk.com.Ambotorix.services.AmbotorixService;
 
@@ -20,7 +21,7 @@ public class HersonDraftStrategy implements DraftStrategy {
     public String getName() { return "herson"; }
 
     @Override
-    public void execute(Lobby lobby, Long chatId, AmbotorixService service) {
+    public void execute(Lobby lobby, ChatRef chatId, AmbotorixService service) {
         service.sendHersonStart(lobby, chatId);
     }
 }

@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import vitbuk.com.Ambotorix.chat.ChatRef;
 import vitbuk.com.Ambotorix.services.AmbotorixService;
 import vitbuk.com.Ambotorix.services.LobbyService;
 
@@ -28,12 +29,12 @@ public class LobbyCleanupScheduler {
 
     @Scheduled(fixedRate = 300_000) // every 5 minutes
     public void terminateExpiredLobbies() {
-        List<Long> expired = lobbyService.getExpiredLobbyChatIds(autoTerminateMinutes);
-        for (Long chatId : expired) {
+        List<ChatRef> expired = lobbyService.getExpiredLobbyChats(autoTerminateMinutes);
+        for (ChatRef chatId : expired) {
             log.info("Auto-terminating lobby in chat {} ({}m after /start)", chatId, autoTerminateMinutes);
-            Integer threadId = lobbyService.getLobby(chatId).getMessageThreadId();
+            ChatRef lobbyChat = lobbyService.getLobby(chatId).getChat();
             lobbyService.removeLobby(chatId);
-            ambotorixService.sendToChat(chatId, threadId,
+            ambotorixService.sendToChat(lobbyChat,
                 "Lobby automatically terminated after " + autoTerminateMinutes + " minutes.");
         }
     }

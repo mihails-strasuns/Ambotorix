@@ -186,7 +186,7 @@ public class    AmbotorixService {
     // logic for command -> /lobby [draftName]. The optional argument pre-selects the draft strategy.
     public void sendLobby(CommandContext ctx, String draftName) {
         ChatRef chatId = ctx.chat();
-        Player host = new Player(ctx.user().userName(), ctx.user().asTelegramUserId());
+        Player host = new Player(ctx.user());
 
         boolean existed = lobbyService.hasLobby(chatId);
         String message = lobbyService.createLobby(chatId, host);
@@ -472,8 +472,7 @@ public class    AmbotorixService {
         }
 
         ChatRef chatId = ctx.chat();
-        Long userId = ctx.user().asTelegramUserId();
-        lobbyService.registerPlayer(chatId, ctx.user().userName(), userId);
+        lobbyService.registerPlayer(chatId, ctx.user());
 
         // Registration is reflected silently in the live status message — no per-join group line.
         refreshStatus(chatId);
@@ -620,7 +619,6 @@ public class    AmbotorixService {
     }
 
     private void submitHersonPicks(ChatRef chatId, Lobby lobby, Player player, String text) {
-        Long userId = player.getUserId();
         List<String> raw = HersonPickParser.parse(text);
         if (raw.size() != 4) {
             sendDm(player.getUser(), "Please send exactly <b>4</b> ranked picks in one message, e.g.\n"
@@ -893,7 +891,7 @@ public class    AmbotorixService {
         for (Player p : order) {
             Leader civ = assignments.get(p.getUserName());
             if (civ == null) continue;
-            Player row = new Player(p.getUserName(), p.getUserId());
+            Player row = new Player(p.getUser());
             row.setPicks(List.of(civ));
             rows.add(row);
         }

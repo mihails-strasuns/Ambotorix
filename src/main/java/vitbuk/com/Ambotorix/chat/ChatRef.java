@@ -27,11 +27,6 @@ public record ChatRef(Platform platform, String channelId, String threadId) {
         return threadId == null ? this : new ChatRef(platform, channelId, null);
     }
 
-    /** The channel id as a Telegram chat id. Only valid on {@link Platform#TELEGRAM} refs. */
-    public long asTelegramChatId() {
-        return Long.parseLong(channelId);
-    }
-
     /** The thread id as a Telegram {@code message_thread_id}, or null for the General topic. */
     public Integer asTelegramThreadId() {
         return threadId == null ? null : Integer.valueOf(threadId);

@@ -1,6 +1,7 @@
 package vitbuk.com.Ambotorix.view;
 
 import org.junit.jupiter.api.Test;
+import vitbuk.com.Ambotorix.chat.UserRef;
 import vitbuk.com.Ambotorix.entities.CivMap;
 import vitbuk.com.Ambotorix.entities.HersonDraftState;
 import vitbuk.com.Ambotorix.entities.Leader;
@@ -26,10 +27,10 @@ class StatusViewTest {
     }
 
     private static Lobby lobbyWith(String hostName, String... others) {
-        Lobby lobby = new Lobby(new Player(hostName, 1L));
+        Lobby lobby = new Lobby(new Player(UserRef.telegram(1L, hostName)));
         long id = 2;
         for (String name : others) {
-            lobby.addPlayer(new Player(name, id++));
+            lobby.addPlayer(new Player(UserRef.telegram(id++, name)));
         }
         lobby.setMapPool(new java.util.ArrayList<>(List.of(CivMap.PANGEA)));
         lobby.setSelectedMap(CivMap.PANGEA);

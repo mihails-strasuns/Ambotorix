@@ -3,6 +3,7 @@ package vitbuk.com.Ambotorix.services;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import vitbuk.com.Ambotorix.chat.ChatRef;
+import vitbuk.com.Ambotorix.chat.UserRef;
 import vitbuk.com.Ambotorix.entities.CivMap;
 import vitbuk.com.Ambotorix.entities.Lobby;
 import vitbuk.com.Ambotorix.entities.Player;
@@ -28,14 +29,14 @@ class LobbyServiceTest {
 
     @Test
     void createLobby_createsLobbyForChat() {
-        service.createLobby(CHAT_A, new Player("host", 1L));
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "host")));
         assertTrue(service.hasLobby(CHAT_A));
     }
 
     @Test
     void twoDifferentChatsHaveIndependentLobbies() {
-        service.createLobby(CHAT_A, new Player("hostA", 1L));
-        service.createLobby(CHAT_B, new Player("hostB", 2L));
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "hostA")));
+        service.createLobby(CHAT_B, new Player(UserRef.telegram(2L, "hostB")));
 
         assertEquals("hostA", service.getLobby(CHAT_A).getHost().getUserName());
         assertEquals("hostB", service.getLobby(CHAT_B).getHost().getUserName());
@@ -43,28 +44,28 @@ class LobbyServiceTest {
 
     @Test
     void createLobby_whenAlreadyExists_returnsAlreadyExistsMessage() {
-        service.createLobby(CHAT_A, new Player("host", 1L));
-        String result = service.createLobby(CHAT_A, new Player("other", 2L));
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "host")));
+        String result = service.createLobby(CHAT_A, new Player(UserRef.telegram(2L, "other")));
         assertTrue(result.toLowerCase().contains("already"));
     }
 
     @Test
     void removeLobby_deletesLobby() {
-        service.createLobby(CHAT_A, new Player("host", 1L));
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "host")));
         service.removeLobby(CHAT_A);
         assertFalse(service.hasLobby(CHAT_A));
     }
 
     @Test
     void registerPlayer_addsPlayerToLobby() {
-        service.createLobby(CHAT_A, new Player("host", 1L));
-        service.registerPlayer(CHAT_A, "player2", 2L);
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "host")));
+        service.registerPlayer(CHAT_A, UserRef.telegram(2L, "player2"));
         assertTrue(service.isRegistered(CHAT_A, "player2"));
     }
 
     @Test
     void isHost_returnsTrueForHost_falseForOthers() {
-        service.createLobby(CHAT_A, new Player("host", 1L));
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "host")));
         assertTrue(service.isHost(CHAT_A, "host"));
         assertFalse(service.isHost(CHAT_A, "nothost"));
     }
@@ -76,20 +77,20 @@ class LobbyServiceTest {
 
     @Test
     void addMap_appendsToMapPool() {
-        service.createLobby(CHAT_A, new Player("host", 1L));
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "host")));
         service.addMap(CHAT_A, CivMap.FRACTAL);
         assertTrue(service.getMappool(CHAT_A).contains(CivMap.FRACTAL));
     }
 
     @Test
     void removeMap_returnsFalse_whenMapNotInPool() {
-        service.createLobby(CHAT_A, new Player("host", 1L));
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "host")));
         assertFalse(service.removeMap(CHAT_A, CivMap.FRACTAL));
     }
 
     @Test
     void getExpiredLobbyChats_returnsChatsWhoseStartExceededTimeout() {
-        service.createLobby(CHAT_A, new Player("host", 1L));
+        service.createLobby(CHAT_A, new Player(UserRef.telegram(1L, "host")));
         Lobby lobby = service.getLobby(CHAT_A);
         lobby.setDraftStartedAt(java.time.LocalDateTime.now().minusMinutes(45));
 

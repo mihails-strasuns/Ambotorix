@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import vitbuk.com.Ambotorix.chat.ChatRef;
+import vitbuk.com.Ambotorix.chat.UserRef;
 import vitbuk.com.Ambotorix.entities.CivMap;
 import vitbuk.com.Ambotorix.entities.HersonDraftState;
 import vitbuk.com.Ambotorix.entities.Leader;
@@ -90,14 +91,14 @@ public class LobbyService {
                 .collect(Collectors.toList());
     }
 
-    public String registerPlayer(ChatRef chat, String userName, Long userId) {
+    public String registerPlayer(ChatRef chat, UserRef user) {
         Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby == null) return "No active lobby in this chat.";
-        if (lobby.getPlayersNames().contains(userName)) {
-            return "Player " + userName + " is already registered";
+        if (lobby.getPlayersNames().contains(user.userName())) {
+            return "Player " + user.userName() + " is already registered";
         }
-        lobby.addPlayer(new Player(userName, userId));
-        return "Player " + userName + " added to lobby";
+        lobby.addPlayer(new Player(user));
+        return "Player " + user.userName() + " added to lobby";
     }
 
     public boolean isRegistered(ChatRef chat, String userName) {

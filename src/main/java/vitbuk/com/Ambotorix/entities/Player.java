@@ -21,13 +21,8 @@ public class Player {
         this.bans = new ArrayList<>();
     }
 
-    public Player(String userName, Long userId) {
-        this(UserRef.telegram(userId, userName));
-    }
-
     public UserRef getUser() { return user; }
     public String getUserName() { return user.userName(); }
-    public Long getUserId() { return user.asTelegramUserId(); }
     public List<Leader> getPicks() { return picks; }
     public void setPicks(List<Leader> picks) { this.picks = picks; }
     public List<Leader> getBans() { return bans; }

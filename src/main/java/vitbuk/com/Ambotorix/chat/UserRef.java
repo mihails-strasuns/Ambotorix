@@ -18,7 +18,17 @@ public record UserRef(Platform platform, String id, String userName, String disp
         return id != null;
     }
 
+    /**
+     * This user's id as a Telegram user id — only meaningful on a Telegram ref.
+     *
+     * <p>Guarded, because the alternative is silence: a Discord snowflake parses as a {@code long}
+     * perfectly well, so an accidental cross-platform call would route a DM to the wrong platform and
+     * merely look like an unreachable user.
+     */
     public Long asTelegramUserId() {
+        if (platform != Platform.TELEGRAM) {
+            throw new IllegalStateException("Not a Telegram user: " + this);
+        }
         return id == null ? null : Long.valueOf(id);
     }
 }

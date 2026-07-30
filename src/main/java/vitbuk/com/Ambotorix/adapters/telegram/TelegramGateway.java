@@ -2,6 +2,7 @@ package vitbuk.com.Ambotorix.adapters.telegram;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
@@ -34,6 +35,8 @@ import java.util.Optional;
  * mention syntax, so rendering is a pass-through plus {@code parseMode=HTML} — all the interesting
  * translation work lives in the Discord adapter.
  */
+// Only exists when Telegram is configured — it needs a TelegramClient.
+@ConditionalOnProperty(name = "bot.token")
 @Service
 public class TelegramGateway implements ChatGateway {
 

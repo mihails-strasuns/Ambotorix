@@ -26,7 +26,7 @@ docker compose up --build      # run via Docker (needs .env, see below)
 Required config is supplied as Spring properties / env vars (the real
 `src/main/resources/application.properties` is gitignored — it holds secrets):
 
-- `bot.token` — Telegram bot token
+- `bot.token` — Telegram bot token; **absent means the whole Telegram adapter is not created**
 - `bot.username` — bot @username
 - `bot.adminId` / `bot.admin.id` — Telegram user id allowed to run admin commands
 - `discord.token` — Discord bot token; **absent means the whole Discord adapter is not created**
@@ -34,6 +34,10 @@ Required config is supplied as Spring properties / env vars (the real
   across platforms)
 - `data.dir` (default `src/main/resources`) — where leader data files are read/written
 - `data.update.cron` (default `0 0 3 * * *`), `lobby.auto-terminate.hours` (default 4)
+
+Both adapters are optional and independently conditional, so the bot runs Telegram-only,
+Discord-only, or both. With neither configured `ChatGatewayRegistry` fails fast rather than starting
+a bot that can't talk to anyone.
 
 In Docker, `docker/entrypoint.sh` seeds a named volume from image defaults on first run so scraped
 data (`civ6_leaders.json`, `leader_shortnames.json`, leader images) survives container rebuilds.

@@ -15,7 +15,8 @@ public class NotificationService {
 
     private final ChatGatewayRegistry chat;
 
-    @Value("${bot.admin.id}")
+    // Absent on a Discord-only deployment; alerts then fall back to the log.
+    @Value("${bot.admin.id:#{null}}")
     private Long adminTelegramId;
 
     public NotificationService(ChatGatewayRegistry chat) {

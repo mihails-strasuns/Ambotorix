@@ -114,8 +114,10 @@ docker compose up --build -d
 
 ### Running on Discord too
 
-The bot speaks Telegram and Discord from one process, with one copy of the lobby/draft logic. Discord
-is opt-in: without `discord.token` the adapter is not created and nothing changes.
+The bot speaks Telegram and Discord from one process, with one copy of the lobby/draft logic. Each
+adapter is independently optional — set `bot.token` for Telegram, `discord.token` for Discord, or both.
+An unconfigured platform's adapter simply isn't created; with neither set the bot refuses to start
+rather than running mute.
 
 ```properties
 discord.token=...              # enables the Discord adapter

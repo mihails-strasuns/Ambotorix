@@ -2,6 +2,7 @@ package vitbuk.com.Ambotorix.adapters.telegram;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.longpolling.BotSession;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
@@ -33,6 +34,8 @@ import java.util.regex.Pattern;
  * suffix, the {@code /command_argument} underscore convention, forum topic ids, and acknowledging a
  * callback query so the tapped button stops spinning.
  */
+// Only polls when Telegram is configured.
+@ConditionalOnProperty(name = "bot.token")
 @Component
 public class TelegramBot implements SpringLongPollingBot, LongPollingSingleThreadUpdateConsumer {
 

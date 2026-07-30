@@ -24,6 +24,12 @@ public class ChatGatewayRegistry {
                 throw new IllegalStateException("Two gateways registered for " + gateway.platform());
             }
         }
+        if (this.gateways.isEmpty()) {
+            // Both adapters are optional, so "none configured" is reachable by omission — and a bot
+            // that starts cleanly but can never speak to anyone is the worst outcome. Say so loudly.
+            throw new IllegalStateException("No chat platform is configured, so the bot has nowhere to "
+                    + "talk. Set bot.token for Telegram, discord.token for Discord, or both.");
+        }
     }
 
     public ChatGateway of(Platform platform) {

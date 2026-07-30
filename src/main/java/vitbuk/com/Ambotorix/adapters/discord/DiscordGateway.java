@@ -23,6 +23,7 @@ import vitbuk.com.Ambotorix.chat.OutgoingMessage;
 import vitbuk.com.Ambotorix.chat.Platform;
 import vitbuk.com.Ambotorix.chat.ui.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,14 +52,14 @@ public class DiscordGateway implements ChatGateway {
     private final JDA jda;
     private final DiscordTextRenderer textRenderer;
     private final DiscordComponentRenderer componentRenderer;
-    private final DiscordChooserPager pager;
+    private final DiscordChooserFanout fanout;
 
     public DiscordGateway(JDA jda, DiscordTextRenderer textRenderer, DiscordComponentRenderer componentRenderer,
-                          DiscordChooserPager pager) {
+                          DiscordChooserFanout fanout) {
         this.jda = jda;
         this.textRenderer = textRenderer;
         this.componentRenderer = componentRenderer;
-        this.pager = pager;
+        this.fanout = fanout;
     }
 
     @Override
@@ -73,32 +74,47 @@ public class DiscordGateway implements ChatGateway {
             if (channel == null) return Optional.empty();
 
             String text = textRenderer.render(message.text(), message.mentions());
-            List<ActionRow> rows = componentRenderer.render(message.components());
+            List<List<ActionRow>> chunks = componentRenderer.renderChunks(message.components());
 
-            // Long text is split so nothing is silently dropped; only the last part carries the
-            // components, so buttons sit at the end of the message the user is reading.
-            List<String> chunks = message.silent()
-                    ? List.of(text)   // the status embed has its own, larger budget
+            // Long text is split so nothing is silently dropped; the status embed has its own, larger
+            // budget and is never chunked.
+            List<String> parts = message.silent()
+                    ? List.of(text)
                     : textRenderer.chunk(text, DiscordTextRenderer.MAX_MESSAGE_LENGTH);
 
-            Message sent = null;
-            for (int i = 0; i < chunks.size(); i++) {
-                boolean last = i == chunks.size() - 1;
+            Message first = null;
+            for (int i = 0; i < parts.size(); i++) {
+                boolean last = i == parts.size() - 1;
                 MessageCreateAction action = message.silent()
-                        ? channel.sendMessageEmbeds(embed(chunks.get(i)))
-                        : channel.sendMessage(chunks.get(i));
-                if (last && !rows.isEmpty()) action = action.setComponents(rows);
+                        ? channel.sendMessageEmbeds(embed(parts.get(i)))
+                        : channel.sendMessage(parts.get(i));
+                // Components ride on the final text part; anything beyond one chunk follows after.
+                if (last && !chunks.isEmpty()) action = action.setComponents(chunks.get(0));
                 if (last && message.hasAttachment()) action = action.addFiles(upload(message.attachment()));
                 if (message.replyTo() != null) action = action.setMessageReference(message.replyTo().messageId());
                 if (message.silent()) action = action.setSuppressedNotifications(true);
-                sent = action.complete();
+                Message sent = action.complete();
+                if (first == null) first = sent;
             }
-            ChatRef chat = chatOf(message.to(), sent);
-            if (sent != null && !message.components().isEmpty()) {
-                // Track the message so a later badge update re-renders the page the player is on.
-                pager.remember(sent.getId(), message.components(), 0);
+            if (first == null) return Optional.empty();
+
+            List<String> messageIds = new ArrayList<>();
+            List<List<String>> signatures = new ArrayList<>();
+            messageIds.add(first.getId());
+            if (!chunks.isEmpty()) signatures.add(componentRenderer.signatureOf(chunks.get(0)));
+
+            // A chooser too big for one message continues in follow-ups, so every option stays on
+            // screen instead of hiding behind a page control.
+            for (int i = 1; i < chunks.size(); i++) {
+                Message extra = channel.sendMessageComponents(chunks.get(i)).complete();
+                messageIds.add(extra.getId());
+                signatures.add(componentRenderer.signatureOf(chunks.get(i)));
             }
-            return Optional.ofNullable(sent).map(m -> new MessageRef(chat, m.getId()));
+            if (!chunks.isEmpty()) fanout.remember(first.getId(), messageIds, signatures);
+
+            ChatRef chat = chatOf(message.to(), first);
+            final Message handle = first;
+            return Optional.of(new MessageRef(chat, handle.getId()));
         } catch (Exception e) {
             // Almost always an unopenable DM (privacy settings, no shared guild) — callers fall back.
             log.warn("Failed to send to {}: {}", message.to(), e.getMessage());
@@ -125,16 +141,37 @@ public class DiscordGateway implements ChatGateway {
         try {
             MessageChannel channel = jda.getChannelById(MessageChannel.class, ref.chat().channelId());
             if (channel == null) return false;
-            // Re-render at whatever page this message is showing, so updating a rank badge does not
-            // yank the player back to page 1.
-            int page = pager.pageOf(ref.messageId());
-            channel.editMessageComponentsById(ref.messageId(),
-                    componentRenderer.render(components, page)).complete();
+
+            DiscordChooserFanout.Group group = fanout.of(ref.messageId());
+            List<String> messageIds = group == null ? List.of(ref.messageId()) : group.messageIds();
+
+            // Clearing the components locks the chooser — every message of it, not just the first.
             if (components.isEmpty()) {
-                pager.forget(ref.messageId());
-            } else {
-                pager.remember(ref.messageId(), components, page);
+                for (String messageId : messageIds) {
+                    channel.editMessageComponentsById(messageId, List.of()).complete();
+                }
+                fanout.forget(ref.messageId());
+                return true;
             }
+
+            List<List<ActionRow>> chunks = componentRenderer.renderChunks(components);
+            List<List<String>> signatures = new ArrayList<>();
+            for (int i = 0; i < chunks.size(); i++) {
+                List<String> signature = componentRenderer.signatureOf(chunks.get(i));
+                signatures.add(signature);
+                boolean known = group != null && i < group.signatures().size() && i < messageIds.size();
+                // Skip messages that would render identically — one tap should cost one edit, not five.
+                if (known && signature.equals(group.signatures().get(i))) continue;
+                if (i < messageIds.size()) {
+                    channel.editMessageComponentsById(messageIds.get(i), chunks.get(i)).complete();
+                } else {
+                    // The chooser grew past what it was sent with; append rather than lose options.
+                    Message extra = channel.sendMessageComponents(chunks.get(i)).complete();
+                    messageIds = new ArrayList<>(messageIds);
+                    messageIds.add(extra.getId());
+                }
+            }
+            fanout.remember(ref.messageId(), messageIds, signatures);
             return true;
         } catch (Exception e) {
             log.warn("Failed to edit components of {} in {}: {}", ref.messageId(), ref.chat(), e.getMessage());

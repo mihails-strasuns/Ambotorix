@@ -18,6 +18,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -52,57 +53,61 @@ class DiscordComponentRendererTest {
     }
 
     @Test
-    void largeChooserIsPagedIntoButtonRows() {
-        Component.Chooser chooser = Component.Chooser.of("leaders", "Pick a leader", options(89), 3);
+    void largeChooserIsSplitAcrossMessagesOfTwentyFive() {
+        List<List<ActionRow>> chunks = renderer.renderChunks(
+                List.of(Component.Chooser.of("leaders", "Pick a leader", options(89), 3)));
 
-        List<ActionRow> rows = renderer.render(List.of(chooser));
-
-        assertEquals(5, rows.size(), "4 rows of leaders plus a navigation row");
-        rows.forEach(r -> r.getComponents().forEach(c -> assertInstanceOf(Button.class, c,
-                "buttons, never a dropdown — a dropdown cannot express a ranking")));
-        assertEquals(DiscordComponentRenderer.OPTIONS_PER_PAGE,
-                rows.subList(0, 4).stream().mapToInt(r -> r.getComponents().size()).sum());
+        assertEquals(4, chunks.size(), "89 options at 25 per message");
+        chunks.forEach(rows -> {
+            assertTrue(rows.size() <= DiscordComponentRenderer.MAX_ACTION_ROWS);
+            rows.forEach(r -> r.getComponents().forEach(c -> assertInstanceOf(Button.class, c,
+                    "buttons, never a dropdown — a dropdown cannot express a ranking")));
+        });
+        assertEquals(89, chunks.stream().flatMap(List::stream)
+                .mapToInt(r -> r.getComponents().size()).sum(),
+                "every option must appear exactly once, with nothing hidden behind a control");
     }
 
     @Test
-    void navigationSharesTheLastRowWithSubmitAndReset() {
-        List<ActionRow> rows = renderer.render(List.of(
+    void actionsLandOnTheFinalMessageBelowEveryOption() {
+        List<List<ActionRow>> chunks = renderer.renderChunks(List.of(
                 Component.Chooser.of("leaders", "Pick", options(89), 3),
                 Component.Actions.of(
                         new Component.ActionButton("✅ SUBMIT", Style.PRIMARY, new ActionRef("/hsubmit", "tok")),
                         new Component.ActionButton("🔄 RESET", Style.SECONDARY, new ActionRef("/hreset", "tok")))));
 
-        assertEquals(5, rows.size());
-        List<String> controls = labels(rows.get(4));
-        assertEquals(List.of("◀", "1/5", "▶", "✅ SUBMIT", "🔄 RESET"), controls,
-                "exactly five controls, which is the only way 20 leaders and both actions fit");
+        List<ActionRow> last = chunks.get(chunks.size() - 1);
+        assertEquals(List.of("✅ SUBMIT", "🔄 RESET"), labels(last.get(last.size() - 1)),
+                "Submit belongs after the whole roster, on the last message");
+        // No message may exceed five rows even with the actions row appended.
+        chunks.forEach(rows -> assertTrue(rows.size() <= DiscordComponentRenderer.MAX_ACTION_ROWS,
+                () -> "a message rendered " + rows.size() + " rows"));
+        assertEquals(89, chunks.stream().flatMap(List::stream)
+                .mapToInt(r -> r.getComponents().size()).sum() - 2);
     }
 
     @Test
-    void pagingShowsTheRequestedSliceAndNeverLosesOptions() {
-        Component.Chooser chooser = Component.Chooser.of("leaders", "Pick", options(89), 3);
-        int pages = renderer.pageCount(chooser);
+    void aSmallChooserStillFitsOneMessage() {
+        assertEquals(1, renderer.renderChunks(
+                List.of(Component.Chooser.of("maps", "Pick a map", options(7), 1))).size());
+    }
 
-        List<String> seen = new java.util.ArrayList<>();
-        for (int page = 0; page < pages; page++) {
-            List<ActionRow> rows = renderer.render(List.of(chooser), page);
-            assertTrue(rows.size() <= DiscordComponentRenderer.MAX_ACTION_ROWS);
-            rows.subList(0, rows.size() - 1).forEach(r -> seen.addAll(labels(r)));
+    @Test
+    void signatureChangesOnlyForTheMessageWhoseButtonsChanged() {
+        List<Component> before = List.of(Component.Chooser.of("leaders", "Pick", options(89), 3));
+        List<Component.Option> after = new java.util.ArrayList<>(options(89));
+        // Rank the third option, as a tap would.
+        after.set(2, Component.Option.of("Option 2", new ActionRef("/x", "tok", "opt2"), "1"));
+
+        List<List<ActionRow>> beforeChunks = renderer.renderChunks(before);
+        List<List<ActionRow>> afterChunks = renderer.renderChunks(
+                List.of(Component.Chooser.of("leaders", "Pick", after, 3)));
+
+        assertNotEquals(renderer.signatureOf(beforeChunks.get(0)), renderer.signatureOf(afterChunks.get(0)));
+        for (int i = 1; i < beforeChunks.size(); i++) {
+            assertEquals(renderer.signatureOf(beforeChunks.get(i)), renderer.signatureOf(afterChunks.get(i)),
+                    "untouched messages must compare equal, or every tap costs five edits");
         }
-
-        assertEquals(89, seen.size(), "every option must appear on exactly one page");
-        assertEquals(89, seen.stream().distinct().count());
-    }
-
-    @Test
-    void pagingWrapsAtBothEnds() {
-        Component.Chooser chooser = Component.Chooser.of("leaders", "Pick", options(89), 3);
-
-        // The final page is short (89 = four full pages plus nine), so the control row is simply the
-        // last row rather than a fixed index.
-        List<ActionRow> rows = renderer.render(List.of(chooser), 4);
-        assertEquals("5/5", labels(rows.get(rows.size() - 1)).get(1));
-        assertEquals(3, rows.size(), "nine leaders take two rows, plus the control row");
     }
 
     @Test
@@ -139,16 +144,18 @@ class DiscordComponentRendererTest {
         List<Leader> roster = leaderService.getLeaders();
         List<Component> herson = hersonPickView.grid(roster, List.of(), "abc123");
 
-        // Paging means the roster can grow without breaking the UI, so assert the invariant that
-        // actually matters: no rendered page may exceed Discord's five rows of five.
-        int pages = renderer.pageCount((Component.Chooser) herson.get(0));
-        for (int page = 0; page < pages; page++) {
-            List<ActionRow> rows = renderer.render(herson, page);
+        List<List<ActionRow>> chunks = renderer.renderChunks(herson);
+
+        // Spreading across messages means the roster can grow freely; what must hold is that no single
+        // message exceeds Discord's five rows of five, and that no leader is dropped.
+        chunks.forEach(rows -> {
             assertTrue(rows.size() <= DiscordComponentRenderer.MAX_ACTION_ROWS,
-                    () -> "page overflowed Discord's row limit with " + roster.size() + " leaders");
+                    () -> "a message overflowed Discord's row limit with " + roster.size() + " leaders");
             rows.forEach(r -> assertTrue(
                     r.getComponents().size() <= DiscordComponentRenderer.MAX_BUTTONS_PER_ROW));
-        }
+        });
+        int buttons = chunks.stream().flatMap(List::stream).mapToInt(r -> r.getComponents().size()).sum();
+        assertEquals(roster.size() + 2, buttons, "every leader, plus Submit and Reset");
     }
 
     private static List<String> labels(ActionRow row) {

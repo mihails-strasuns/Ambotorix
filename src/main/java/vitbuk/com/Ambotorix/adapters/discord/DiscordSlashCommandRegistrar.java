@@ -79,10 +79,22 @@ public class DiscordSlashCommandRegistrar {
         // Discord command names are lowercase and have no leading slash.
         String name = command.getInfo().prefix().replaceFirst("^/", "").toLowerCase();
         SlashCommandData data = Commands.slash(name, describe(command));
-        if (command instanceof DynamicCommand) {
-            data.addOption(OptionType.STRING, ARGS_OPTION, argumentHint(command), true);
+
+        // Whether a command takes an argument comes from its usage string ("/lobby [draft]"), not from
+        // DynamicCommand — that marker means the argument is *mandatory*. Reading it from the marker
+        // alone gave /lobby no argument slot at all, so "/lobby herson" silently produced the default
+        // draft: on Discord an unregistered option cannot be typed, it is simply dropped.
+        if (takesArgument(command)) {
+            data.addOption(OptionType.STRING, ARGS_OPTION, argumentHint(command),
+                    command instanceof DynamicCommand);
         }
         return data;
+    }
+
+    /** Usage strings spell an argument as {@code [likeThis]}, whether it is required or optional. */
+    private boolean takesArgument(Command command) {
+        String usage = command.getInfo().name();
+        return usage != null && usage.contains("[");
     }
 
     private String describe(Command command) {

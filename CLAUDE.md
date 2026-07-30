@@ -94,21 +94,22 @@ decides what that becomes:
 | | Telegram | Discord |
 |---|---|---|
 | ≤25 options | inline keyboard, `preferredColumns` wide | buttons, 5 per row |
-| >25 options (the 89-leader roster) | one inline keyboard with all of them | **paged**: 4 rows of 5, plus a control row |
+| >25 options (the 89-leader roster) | one inline keyboard with all of them | **spread across several messages** of 25 |
 | rank badges | appended to the label — `Lincoln (1)` | same |
 
-Discord allows only **5 action rows of 5 buttons**, so a large chooser is paged and the last row
-combines navigation with the view's own actions: `◀ · 2/5 · ▶ · SUBMIT · RESET` is exactly five
-buttons, which is the only way 20 leaders and both actions fit at once.
+Discord allows only **5 action rows of 5 buttons** — 25 per message — so a chooser over the roster is
+sent as four messages, with the view's actions (Submit/Reset) on the last. Every leader stays on
+screen; nothing hides behind a page control.
 
 **Not dropdowns, deliberately.** A `StringSelectMenu` hides its options and — decisively — cannot
 express a *ranking*: Discord returns a multi-select's values in the component's own order, not the
 click order, so "rank your top 4" is unrepresentable. Buttons show everything and each tap carries
 its own meaning.
 
-Paging lives entirely in the adapter: `DiscordChooserPager` remembers which page each message shows,
-so a ◀ ▶ tap is answered without involving the core, and a rank update re-renders the page the player
-is still looking at. Telegram never learns that pagination exists.
+The fan-out lives entirely in the adapter. The core holds one `MessageRef` (the first message);
+`DiscordChooserFanout` maps it to the whole group and fingerprints what each message renders, so a
+rank update edits only the message that actually changed — one tap costs one edit, not four. Telegram
+never learns that any of this happens.
 
 ### Request flow
 

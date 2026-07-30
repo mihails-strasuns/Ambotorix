@@ -1,5 +1,6 @@
 package vitbuk.com.Ambotorix.adapters.discord;
 
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -12,6 +13,8 @@ import net.dv8tion.jda.api.interactions.components.ComponentInteraction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import vitbuk.com.Ambotorix.BotDispatcher;
 import vitbuk.com.Ambotorix.chat.ActionRef;
@@ -35,6 +38,13 @@ import java.util.List;
  *       always delivers message content in DMs, so this works without the privileged
  *       {@code MESSAGE_CONTENT} intent.</li>
  * </ul>
+ *
+ * <p>This class attaches <em>itself</em> to JDA once the application is ready, rather than being
+ * handed to {@code JDABuilder}. It has to: dispatching an event reaches {@link DiscordGateway}, which
+ * needs the {@code JDA} bean, so constructing JDA with this listener would close a bean cycle. Waiting
+ * for {@link ApplicationReadyEvent} also guarantees the whole dispatch chain exists before the first
+ * event can arrive; anything a user clicks in the second before that is simply not delivered, which
+ * is the right outcome for a bot that is not up yet.
  */
 // Only listens when the Discord adapter is configured.
 @ConditionalOnProperty(name = "discord.token")
@@ -44,9 +54,17 @@ public class DiscordBot extends ListenerAdapter {
     private static final Logger log = LoggerFactory.getLogger(DiscordBot.class);
 
     private final BotDispatcher dispatcher;
+    private final JDA jda;
 
-    public DiscordBot(BotDispatcher dispatcher) {
+    public DiscordBot(BotDispatcher dispatcher, JDA jda) {
         this.dispatcher = dispatcher;
+        this.jda = jda;
+    }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void startListening() {
+        jda.addEventListener(this);
+        log.info("Discord adapter listening for events");
     }
 
     @Override

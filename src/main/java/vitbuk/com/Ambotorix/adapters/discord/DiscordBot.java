@@ -113,14 +113,16 @@ public class DiscordBot extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(MessageReceivedEvent event) {
+        // Only DM text is ever acted on — that is how Herson ranked picks arrive, and group chatter
+        // without a command is ignored on both platforms. Bailing out before touching the message is
+        // also what keeps us off the privileged MESSAGE_CONTENT intent: Discord delivers content for
+        // DMs regardless, but reading it in a guild needs that intent and merely warns without it.
+        if (!event.isFromType(ChannelType.PRIVATE)) return;
         if (event.getAuthor().isBot()) return;
         String content = event.getMessage().getContentRaw().trim();
         if (content.isEmpty() || content.startsWith("/")) return; // slash commands arrive as interactions
-        dispatch(new ChatEvent.FreeText(
-                userOf(event.getAuthor()),
-                chatOf(event.getChannel().getId()),
-                event.isFromType(ChannelType.PRIVATE),
-                content));
+        dispatch(new ChatEvent.FreeText(userOf(event.getAuthor()), chatOf(event.getChannel().getId()),
+                true, content));
     }
 
     private void dispatch(ChatEvent event) {

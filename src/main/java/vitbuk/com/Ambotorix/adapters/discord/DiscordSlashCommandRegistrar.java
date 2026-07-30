@@ -1,6 +1,7 @@
 package vitbuk.com.Ambotorix.adapters.discord;
 
 import net.dv8tion.jda.api.JDA;
+import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
@@ -41,12 +42,36 @@ public class DiscordSlashCommandRegistrar {
         this.commandFactory = commandFactory;
     }
 
-    public void register(JDA jda) {
+    /**
+     * Publish the command list.
+     *
+     * <p>With {@code discord.guild-id} set, commands are registered to that one guild and appear
+     * <b>immediately</b>. Global registration (no guild id) is correct for a real deployment but
+     * Discord can take up to an hour to propagate it — during which typing {@code /lobby} just sends
+     * a plain message and the bot looks broken. Point it at your test server while developing.
+     */
+    public void register(JDA jda, String guildId) {
         List<SlashCommandData> commands = commandFactory.getAll().stream()
                 .map(this::toSlashCommand)
                 .toList();
+
+        if (guildId != null && !guildId.isBlank()) {
+            Guild guild = jda.getGuildById(guildId.trim());
+            if (guild == null) {
+                log.error("discord.guild-id={} is not a guild this bot is in — no commands registered. "
+                        + "Check the id, or drop the property to register globally.", guildId);
+                return;
+            }
+            guild.updateCommands().addCommands(commands).queue(
+                    ok -> log.info("Registered {} slash commands in guild {}", commands.size(), guild.getName()),
+                    error -> log.error("Failed to register slash commands in guild {}", guild.getName(), error));
+            return;
+        }
+
         jda.updateCommands().addCommands(commands).queue(
-                ok -> log.info("Registered {} Discord slash commands", commands.size()),
+                ok -> log.info("Registered {} Discord slash commands globally "
+                        + "(can take up to an hour to appear; set discord.guild-id for instant "
+                        + "registration on one server)", commands.size()),
                 error -> log.error("Failed to register Discord slash commands", error));
     }
 

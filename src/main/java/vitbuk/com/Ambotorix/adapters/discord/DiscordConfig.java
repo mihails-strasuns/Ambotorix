@@ -31,15 +31,17 @@ public class DiscordConfig {
 
     @Bean(destroyMethod = "shutdown")
     public JDA jda(DiscordSlashCommandRegistrar registrar,
-                   @org.springframework.beans.factory.annotation.Value("${discord.token}") String token)
+                   @org.springframework.beans.factory.annotation.Value("${discord.token}") String token,
+                   @org.springframework.beans.factory.annotation.Value("${discord.guild-id:#{null}}") String guildId)
             throws InterruptedException {
-        JDA jda = JDABuilder.createLight(token,
-                        GatewayIntent.GUILD_MESSAGES,
-                        GatewayIntent.DIRECT_MESSAGES)
+        // DIRECT_MESSAGES is the only intent needed: commands arrive as interactions, and the only
+        // message text the bot reads is in DMs (where Discord delivers content without a privileged
+        // intent). Subscribing to guild messages would just warn about MESSAGE_CONTENT on every post.
+        JDA jda = JDABuilder.createLight(token, GatewayIntent.DIRECT_MESSAGES)
                 .disableCache(java.util.Arrays.asList(CacheFlag.values()))
                 .build()
                 .awaitReady();
-        registrar.register(jda);
+        registrar.register(jda, guildId);
         log.info("Discord adapter connected as {}", jda.getSelfUser().getName());
         return jda;
     }

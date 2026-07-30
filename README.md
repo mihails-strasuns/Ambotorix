@@ -122,7 +122,13 @@ rather than running mute.
 ```properties
 discord.token=...              # enables the Discord adapter
 bot.discord-admin-id=...       # admin rights are per platform; a Telegram admin id means nothing on Discord
+discord.guild-id=...           # optional: register commands to one server, instantly (see below)
 ```
+
+**Commands not showing up?** Global slash-command registration can take Discord up to an hour to
+propagate, and until it does, typing `/lobby` just sends a plain message and the bot looks dead. Set
+`discord.guild-id` to your server's id (Developer Mode on → right-click the server → Copy Server ID)
+and commands register to that server immediately. Leave it unset for a real deployment.
 
 Set up the application at <https://discord.com/developers/applications>, then invite the bot with the
 `bot` and `applications.commands` scopes and these permissions: **Send Messages**, **Embed Links**,

@@ -32,6 +32,8 @@ Required config is supplied as Spring properties / env vars (the real
 - `discord.token` — Discord bot token; **absent means the whole Discord adapter is not created**
 - `bot.discord-admin-id` — Discord user id allowed to run admin commands (admin rights do not carry
   across platforms)
+- `discord.guild-id` (optional) — register slash commands to this one guild, which takes effect
+  immediately; unset means global registration, which Discord can take an hour to propagate
 - `data.dir` (default `src/main/resources`) — where leader data files are read/written
 - `data.update.cron` (default `0 0 3 * * *`), `lobby.auto-terminate.hours` (default 4)
 

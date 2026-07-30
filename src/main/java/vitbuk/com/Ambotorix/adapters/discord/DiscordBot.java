@@ -55,10 +55,15 @@ public class DiscordBot extends ListenerAdapter {
 
     private final BotDispatcher dispatcher;
     private final JDA jda;
+    private final DiscordComponentRenderer componentRenderer;
+    private final DiscordChooserPager pager;
 
-    public DiscordBot(BotDispatcher dispatcher, JDA jda) {
+    public DiscordBot(BotDispatcher dispatcher, JDA jda, DiscordComponentRenderer componentRenderer,
+                      DiscordChooserPager pager) {
         this.dispatcher = dispatcher;
         this.jda = jda;
+        this.componentRenderer = componentRenderer;
+        this.pager = pager;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -103,6 +108,9 @@ public class DiscordBot extends ListenerAdapter {
         event.deferEdit().queue(null, error -> {});
         ActionRef action = ActionRef.decode(payload);
         if (action == null) return;
+        // Page navigation is the adapter's own affair — Telegram shows every option at once and has no
+        // such button, so the dispatcher must never see one.
+        if (turnPage(event, action)) return;
         dispatch(new ChatEvent.Interaction(
                 userOf(event.getUser()),
                 chatOf(event.getChannel().getId()),
@@ -131,6 +139,30 @@ public class DiscordBot extends ListenerAdapter {
         } catch (Exception e) {
             log.error("Failed to handle Discord event from {}", event.from(), e);
         }
+    }
+
+    /**
+     * Handle a ◀ ▶ tap locally: re-render the tracked message at the requested page. Returns false if
+     * this was not a navigation tap, so the caller carries on dispatching it.
+     */
+    private boolean turnPage(ComponentInteraction event, ActionRef action) {
+        if (!DiscordComponentRenderer.PAGE_VERB.equals(action.verb())) return false;
+        String messageId = event.getMessage().getId();
+        List<vitbuk.com.Ambotorix.chat.ui.Component> declared = pager.componentsOf(messageId);
+        if (declared == null) {
+            log.debug("Page tap on untracked message {} — the bot probably restarted", messageId);
+            return true;
+        }
+        int page;
+        try {
+            page = Integer.parseInt(action.arg(0));
+        } catch (NumberFormatException | NullPointerException e) {
+            return true;
+        }
+        pager.remember(messageId, declared, page);
+        event.getHook().editOriginalComponents(componentRenderer.render(declared, page))
+                .queue(null, error -> log.warn("Failed to turn page on {}: {}", messageId, error.getMessage()));
+        return true;
     }
 
     private UserRef userOf(User user) {

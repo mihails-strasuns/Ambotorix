@@ -33,7 +33,8 @@ import static org.mockito.Mockito.when;
 class DiscordBotInboundTest {
 
     private final BotDispatcher dispatcher = mock(BotDispatcher.class);
-    private final DiscordBot bot = new DiscordBot(dispatcher, mock(JDA.class));
+    private final DiscordBot bot = new DiscordBot(dispatcher, mock(JDA.class),
+            new DiscordComponentRenderer(), new DiscordChooserPager());
 
     private static MessageReceivedEvent event(ChannelType type, String content, boolean fromBot) {
         MessageReceivedEvent event = mock(MessageReceivedEvent.class);

@@ -93,12 +93,22 @@ decides what that becomes:
 
 | | Telegram | Discord |
 |---|---|---|
-| ≤25 options | inline keyboard | buttons, 5 per row |
-| >25 options / ranked | inline keyboard, badge appended to the label | grouped `StringSelectMenu`s of 25, rank in the option description |
+| ≤25 options | inline keyboard, `preferredColumns` wide | buttons, 5 per row |
+| >25 options (the 89-leader roster) | one inline keyboard with all of them | **paged**: 4 rows of 5, plus a control row |
+| rank badges | appended to the label — `Lincoln (1)` | same |
 
-**Discord allows only 5 action rows**, so the roster (89 leaders) fills exactly 4 select menus plus
-the Submit/Reset row. `DiscordComponentRendererTest.liveRosterStillFitsDiscordsFiveRowCeiling` fails
-the build if the roster ever passes 100 — at which point the renderer needs letter-filter paging.
+Discord allows only **5 action rows of 5 buttons**, so a large chooser is paged and the last row
+combines navigation with the view's own actions: `◀ · 2/5 · ▶ · SUBMIT · RESET` is exactly five
+buttons, which is the only way 20 leaders and both actions fit at once.
+
+**Not dropdowns, deliberately.** A `StringSelectMenu` hides its options and — decisively — cannot
+express a *ranking*: Discord returns a multi-select's values in the component's own order, not the
+click order, so "rank your top 4" is unrepresentable. Buttons show everything and each tap carries
+its own meaning.
+
+Paging lives entirely in the adapter: `DiscordChooserPager` remembers which page each message shows,
+so a ◀ ▶ tap is answered without involving the core, and a rank update re-renders the page the player
+is still looking at. Telegram never learns that pagination exists.
 
 ### Request flow
 

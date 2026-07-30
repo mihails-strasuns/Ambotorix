@@ -2,7 +2,6 @@ package vitbuk.com.Ambotorix.adapters.discord;
 
 import net.dv8tion.jda.api.interactions.components.ActionRow;
 import net.dv8tion.jda.api.interactions.components.buttons.Button;
-import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,15 +17,15 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Conformance: what the renderer emits must be something Discord will actually accept.
  *
- * <p>The load-bearing one is {@link #liveRosterStillFitsDiscordsFiveRowCeiling()}. Discord allows 5
- * action rows per message and 25 options per select menu, so the whole roster plus a Submit/Reset row
- * has to fit in 4 menus — 100 option slots. Today's roster is 89. When BBG grows past 100 this test
- * fails, which is the point: better a red build than an exception mid-draft.
+ * <p>Discord allows 5 action rows of 5 buttons, so a chooser over 89 leaders is paged: 4 rows of
+ * leaders plus one row that shares page navigation with the view's own actions. The row ceiling is
+ * absolute — exceed it and Discord rejects the message — so it is asserted for every shape.
  */
 @SpringBootTest
 class DiscordComponentRendererTest {
@@ -53,64 +52,67 @@ class DiscordComponentRendererTest {
     }
 
     @Test
-    void largeChooserBecomesSelectMenus() {
-        Component.Chooser chooser = Component.Chooser.of("leaders", "Pick a leader", options(60), 3);
+    void largeChooserIsPagedIntoButtonRows() {
+        Component.Chooser chooser = Component.Chooser.of("leaders", "Pick a leader", options(89), 3);
 
         List<ActionRow> rows = renderer.render(List.of(chooser));
 
-        assertEquals(3, rows.size(), "60 options at 25 per menu");
-        rows.forEach(r -> assertTrue(r.getComponents().get(0) instanceof StringSelectMenu));
+        assertEquals(5, rows.size(), "4 rows of leaders plus a navigation row");
+        rows.forEach(r -> r.getComponents().forEach(c -> assertInstanceOf(Button.class, c,
+                "buttons, never a dropdown — a dropdown cannot express a ranking")));
+        assertEquals(DiscordComponentRenderer.OPTIONS_PER_PAGE,
+                rows.subList(0, 4).stream().mapToInt(r -> r.getComponents().size()).sum());
     }
 
     @Test
-    void rankedChooserUsesSelectMenusEvenWhenSmall() {
-        // Ranking needs per-option state (the rank badge), which buttons cannot carry on Discord.
-        Component.Chooser chooser = new Component.Chooser("herson-pick", "Rank", options(10), 3, Selection.RANKED);
+    void navigationSharesTheLastRowWithSubmitAndReset() {
+        List<ActionRow> rows = renderer.render(List.of(
+                Component.Chooser.of("leaders", "Pick", options(89), 3),
+                Component.Actions.of(
+                        new Component.ActionButton("✅ SUBMIT", Style.PRIMARY, new ActionRef("/hsubmit", "tok")),
+                        new Component.ActionButton("🔄 RESET", Style.SECONDARY, new ActionRef("/hreset", "tok")))));
 
-        List<ActionRow> rows = renderer.render(List.of(chooser));
-
-        assertTrue(rows.get(0).getComponents().get(0) instanceof StringSelectMenu);
+        assertEquals(5, rows.size());
+        List<String> controls = labels(rows.get(4));
+        assertEquals(List.of("◀", "1/5", "▶", "✅ SUBMIT", "🔄 RESET"), controls,
+                "exactly five controls, which is the only way 20 leaders and both actions fit");
     }
 
     @Test
-    void actionsLandOnTheLastRow() {
-        Component.Chooser chooser = Component.Chooser.of("leaders", "Pick", options(60), 3);
-        Component.Actions actions = Component.Actions.of(
-                new Component.ActionButton("✅ SUBMIT", Style.PRIMARY, new ActionRef("/hsubmit", "tok")));
+    void pagingShowsTheRequestedSliceAndNeverLosesOptions() {
+        Component.Chooser chooser = Component.Chooser.of("leaders", "Pick", options(89), 3);
+        int pages = renderer.pageCount(chooser);
 
-        List<ActionRow> rows = renderer.render(List.of(chooser, actions));
+        List<String> seen = new java.util.ArrayList<>();
+        for (int page = 0; page < pages; page++) {
+            List<ActionRow> rows = renderer.render(List.of(chooser), page);
+            assertTrue(rows.size() <= DiscordComponentRenderer.MAX_ACTION_ROWS);
+            rows.subList(0, rows.size() - 1).forEach(r -> seen.addAll(labels(r)));
+        }
 
-        assertTrue(rows.get(rows.size() - 1).getComponents().get(0) instanceof Button,
-                "Submit must be reachable, below the menus");
+        assertEquals(89, seen.size(), "every option must appear on exactly one page");
+        assertEquals(89, seen.stream().distinct().count());
     }
 
     @Test
-    void neverExceedsFiveActionRows() {
-        Component.Chooser huge = Component.Chooser.of("leaders", "Pick", options(500), 3);
-        Component.Actions actions = Component.Actions.of(
-                new Component.ActionButton("✅ SUBMIT", Style.PRIMARY, new ActionRef("/hsubmit", "tok")));
+    void pagingWrapsAtBothEnds() {
+        Component.Chooser chooser = Component.Chooser.of("leaders", "Pick", options(89), 3);
 
-        List<ActionRow> rows = renderer.render(List.of(huge, actions));
-
-        assertTrue(rows.size() <= DiscordComponentRenderer.MAX_ACTION_ROWS, "got " + rows.size() + " rows");
-        assertTrue(rows.get(rows.size() - 1).getComponents().get(0) instanceof Button,
-                "actions are kept even when the chooser has to be truncated");
+        // The final page is short (89 = four full pages plus nine), so the control row is simply the
+        // last row rather than a fixed index.
+        List<ActionRow> rows = renderer.render(List.of(chooser), 4);
+        assertEquals("5/5", labels(rows.get(rows.size() - 1)).get(1));
+        assertEquals(3, rows.size(), "nine leaders take two rows, plus the control row");
     }
 
     @Test
-    void liveRosterStillFitsDiscordsFiveRowCeiling() {
-        List<Leader> roster = leaderService.getLeaders();
-        List<Component> herson = hersonPickView.grid(roster, List.of(), "abc123");
+    void rankBadgesRideAlongOnTheButtonLabels() {
+        Component.Option ranked = Component.Option.of("Lincoln", new ActionRef("/hpick", "tok", "lincoln"), "1");
+        List<ActionRow> rows = renderer.render(List.of(
+                new Component.Chooser("herson-pick", "Rank", List.of(ranked), 3, Selection.RANKED)));
 
-        List<ActionRow> rows = renderer.render(herson);
-
-        int capacity = (DiscordComponentRenderer.MAX_ACTION_ROWS - 1) * DiscordComponentRenderer.MAX_OPTIONS_PER_MENU;
-        assertTrue(roster.size() <= capacity,
-                () -> "The roster has grown to " + roster.size() + " leaders but only " + capacity
-                        + " fit in Discord's 4 usable select menus. Add letter-filter paging to "
-                        + "DiscordComponentRenderer before shipping this roster.");
-        assertEquals(Math.ceil(roster.size() / 25.0) + 1, (double) rows.size(),
-                "one menu per 25 leaders, plus the Submit/Reset row");
+        assertEquals(List.of("Lincoln (1)"), labels(rows.get(0)),
+                "the rank has to be visible on the button itself, Telegram-style");
     }
 
     @Test
@@ -130,5 +132,26 @@ class DiscordComponentRendererTest {
                         () -> "payload too long for a Discord custom_id: " + payload);
             }
         }
+    }
+
+    @Test
+    void theLiveHersonGridFitsWhateverTheRosterSize() {
+        List<Leader> roster = leaderService.getLeaders();
+        List<Component> herson = hersonPickView.grid(roster, List.of(), "abc123");
+
+        // Paging means the roster can grow without breaking the UI, so assert the invariant that
+        // actually matters: no rendered page may exceed Discord's five rows of five.
+        int pages = renderer.pageCount((Component.Chooser) herson.get(0));
+        for (int page = 0; page < pages; page++) {
+            List<ActionRow> rows = renderer.render(herson, page);
+            assertTrue(rows.size() <= DiscordComponentRenderer.MAX_ACTION_ROWS,
+                    () -> "page overflowed Discord's row limit with " + roster.size() + " leaders");
+            rows.forEach(r -> assertTrue(
+                    r.getComponents().size() <= DiscordComponentRenderer.MAX_BUTTONS_PER_ROW));
+        }
+    }
+
+    private static List<String> labels(ActionRow row) {
+        return row.getComponents().stream().map(c -> ((Button) c).getLabel()).toList();
     }
 }

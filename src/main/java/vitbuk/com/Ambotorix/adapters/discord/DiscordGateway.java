@@ -51,11 +51,14 @@ public class DiscordGateway implements ChatGateway {
     private final JDA jda;
     private final DiscordTextRenderer textRenderer;
     private final DiscordComponentRenderer componentRenderer;
+    private final DiscordChooserPager pager;
 
-    public DiscordGateway(JDA jda, DiscordTextRenderer textRenderer, DiscordComponentRenderer componentRenderer) {
+    public DiscordGateway(JDA jda, DiscordTextRenderer textRenderer, DiscordComponentRenderer componentRenderer,
+                          DiscordChooserPager pager) {
         this.jda = jda;
         this.textRenderer = textRenderer;
         this.componentRenderer = componentRenderer;
+        this.pager = pager;
     }
 
     @Override
@@ -91,6 +94,10 @@ public class DiscordGateway implements ChatGateway {
                 sent = action.complete();
             }
             ChatRef chat = chatOf(message.to(), sent);
+            if (sent != null && !message.components().isEmpty()) {
+                // Track the message so a later badge update re-renders the page the player is on.
+                pager.remember(sent.getId(), message.components(), 0);
+            }
             return Optional.ofNullable(sent).map(m -> new MessageRef(chat, m.getId()));
         } catch (Exception e) {
             // Almost always an unopenable DM (privacy settings, no shared guild) — callers fall back.
@@ -118,7 +125,16 @@ public class DiscordGateway implements ChatGateway {
         try {
             MessageChannel channel = jda.getChannelById(MessageChannel.class, ref.chat().channelId());
             if (channel == null) return false;
-            channel.editMessageComponentsById(ref.messageId(), componentRenderer.render(components)).complete();
+            // Re-render at whatever page this message is showing, so updating a rank badge does not
+            // yank the player back to page 1.
+            int page = pager.pageOf(ref.messageId());
+            channel.editMessageComponentsById(ref.messageId(),
+                    componentRenderer.render(components, page)).complete();
+            if (components.isEmpty()) {
+                pager.forget(ref.messageId());
+            } else {
+                pager.remember(ref.messageId(), components, page);
+            }
             return true;
         } catch (Exception e) {
             log.warn("Failed to edit components of {} in {}: {}", ref.messageId(), ref.chat(), e.getMessage());

@@ -119,11 +119,25 @@ adapter is independently optional — set `bot.token` for Telegram, `discord.tok
 An unconfigured platform's adapter simply isn't created; with neither set the bot refuses to start
 rather than running mute.
 
-```properties
-discord.token=...              # enables the Discord adapter
-bot.discord-admin-id=...       # admin rights are per platform; a Telegram admin id means nothing on Discord
-discord.guild-id=...           # optional: register commands to one server, instantly (see below)
+In Docker these go in `.env` alongside the Telegram ones (Spring maps the env var names onto the
+property names automatically):
+
+```bash
+DISCORD_TOKEN=...            # enables the Discord adapter
+BOT_DISCORD_ADMIN_ID=...     # admin rights are per platform; a Telegram admin id means nothing on Discord
+DISCORD_GUILD_ID=...         # optional: register commands to one server, instantly (see below)
 ```
+
+Running without Docker, the same three as properties in `src/main/resources/application.properties`:
+
+```properties
+discord.token=...
+bot.discord-admin-id=...
+discord.guild-id=...
+```
+
+After editing `.env`, use `docker compose up -d` — `docker compose restart` reuses the old
+environment and your change will appear to have no effect.
 
 **Commands not showing up?** Global slash-command registration can take Discord up to an hour to
 propagate, and until it does, typing `/lobby` just sends a plain message and the bot looks dead. Set

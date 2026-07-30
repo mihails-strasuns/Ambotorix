@@ -2,6 +2,7 @@ package vitbuk.com.Ambotorix.services;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import vitbuk.com.Ambotorix.chat.UserRef;
 import vitbuk.com.Ambotorix.entities.Leader;
 import vitbuk.com.Ambotorix.entities.Lobby;
 import vitbuk.com.Ambotorix.entities.Player;
@@ -29,8 +30,8 @@ class LeaderServiceTest {
 
     @Test
     void setLeadersPool_excludesBannedLeaders() {
-        Player host = new Player("host", 1L);
-        Player player2 = new Player("player2", 2L);
+        Player host = new Player(UserRef.telegram(1L, "host"));
+        Player player2 = new Player(UserRef.telegram(2L, "player2"));
         Leader bannedLeader = allLeaders.get(0);
         host.getBans().add(bannedLeader);
 
@@ -53,8 +54,8 @@ class LeaderServiceTest {
     void setLeadersPool_assignsUniquePicksAcrossPlayers() {
         // 2 players, pickSize=6, 20 leaders → 20 > 12, picks are assigned from a shuffled
         // non-repeating iterator so all assigned picks across all players are unique
-        Player host = new Player("host", 1L);
-        Player player2 = new Player("player2", 2L);
+        Player host = new Player(UserRef.telegram(1L, "host"));
+        Player player2 = new Player(UserRef.telegram(2L, "player2"));
 
         Lobby lobby = new Lobby(host);
         lobby.addPlayer(player2);

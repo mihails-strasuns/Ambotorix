@@ -3,6 +3,8 @@ package vitbuk.com.Ambotorix.services;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import vitbuk.com.Ambotorix.chat.ChatRef;
+import vitbuk.com.Ambotorix.chat.UserRef;
 import vitbuk.com.Ambotorix.entities.CivMap;
 import vitbuk.com.Ambotorix.entities.HersonDraftState;
 import vitbuk.com.Ambotorix.entities.Leader;
@@ -18,41 +20,67 @@ import java.util.stream.Collectors;
 public class LobbyService {
 
     private static final Logger log = LoggerFactory.getLogger(LobbyService.class);
-    private final Map<Long, Lobby> lobbies = new ConcurrentHashMap<>();
 
-    public String createLobby(Long chatId, Player host) {
-        return createLobby(chatId, null, host);
-    }
+    /**
+     * Lobbies keyed by {@link ChatRef#channelKey()} — platform included, so a Telegram group and a
+     * Discord channel can never collide even if their numeric ids happen to coincide.
+     */
+    private final Map<ChatRef, Lobby> lobbies = new ConcurrentHashMap<>();
+    /** Short handles used in button payloads, resolved back to the lobby's channel. */
+    private final Map<String, ChatRef> byToken = new ConcurrentHashMap<>();
 
-    /** Creates a lobby anchored to a Telegram forum topic ({@code threadId}; null = General topic). */
-    public String createLobby(Long chatId, Integer threadId, Player host) {
+    public String createLobby(ChatRef chat, Player host) {
+        ChatRef key = chat.channelKey();
         Lobby lobby = new Lobby(host);
-        lobby.setMessageThreadId(threadId);
-        Lobby existing = lobbies.putIfAbsent(chatId, lobby);
+        lobby.setChat(chat);
+        Lobby existing = lobbies.putIfAbsent(key, lobby);
         if (existing != null) {
             return "Lobby already exists. " + existing.getHost().getUserName()
                     + " can terminate it using /terminate";
         }
+        lobby.setToken(mintToken(key));
         return "Lobby created by " + host.getUserName();
     }
 
-    public boolean hasLobby(Long chatId) {
-        return lobbies.containsKey(chatId);
+    /**
+     * A short, opaque handle for a lobby, carried in button payloads instead of the raw channel id.
+     *
+     * <p>Both platforms cap interactive payloads — Telegram at 64 bytes of {@code callback_data},
+     * Discord at 100 characters of {@code custom_id} — and a 19-digit Discord snowflake plus a verb
+     * and a leader shortname eats a lot of that. A 6-character token keeps every payload small and,
+     * unlike a bare channel id, resolves back to the lobby's full address including its thread.
+     */
+    private String mintToken(ChatRef key) {
+        String token;
+        do {
+            token = Long.toString(Math.abs(new Random().nextLong()), 36);
+            token = token.substring(0, Math.min(6, token.length()));
+        } while (byToken.putIfAbsent(token, key) != null);
+        return token;
     }
 
-    public Lobby getLobby(Long chatId) {
-        return lobbies.get(chatId);
+    /** The lobby a button payload refers to, or null if that lobby is gone (a stale button). */
+    public ChatRef resolveToken(String token) {
+        return token == null ? null : byToken.get(token);
     }
 
-    public void removeLobby(Long chatId) {
-        lobbies.remove(chatId);
+    public boolean hasLobby(ChatRef chat) {
+        return lobbies.containsKey(chat.channelKey());
     }
 
-    public Map<Long, Lobby> getAllLobbies() {
+    public Lobby getLobby(ChatRef chat) {
+        return lobbies.get(chat.channelKey());
+    }
+
+    public void removeLobby(ChatRef chat) {
+        lobbies.remove(chat.channelKey());
+    }
+
+    public Map<ChatRef, Lobby> getAllLobbies() {
         return Collections.unmodifiableMap(lobbies);
     }
 
-    public List<Long> getExpiredLobbyChatIds(int minutesAfterStart) {
+    public List<ChatRef> getExpiredLobbyChats(int minutesAfterStart) {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(minutesAfterStart);
         return lobbies.entrySet().stream()
                 .filter(e -> {
@@ -63,45 +91,45 @@ public class LobbyService {
                 .collect(Collectors.toList());
     }
 
-    public String registerPlayer(Long chatId, String userName, Long userId) {
-        Lobby lobby = lobbies.get(chatId);
+    public String registerPlayer(ChatRef chat, UserRef user) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby == null) return "No active lobby in this chat.";
-        if (lobby.getPlayersNames().contains(userName)) {
-            return "Player " + userName + " is already registered";
+        if (lobby.getPlayersNames().contains(user.userName())) {
+            return "Player " + user.userName() + " is already registered";
         }
-        lobby.addPlayer(new Player(userName, userId));
-        return "Player " + userName + " added to lobby";
+        lobby.addPlayer(new Player(user));
+        return "Player " + user.userName() + " added to lobby";
     }
 
-    public boolean isRegistered(Long chatId, String userName) {
-        Lobby lobby = lobbies.get(chatId);
+    public boolean isRegistered(ChatRef chat, String userName) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         return lobby != null && lobby.getPlayersNames().contains(userName);
     }
 
-    public boolean isHost(Long chatId, String userName) {
-        Lobby lobby = lobbies.get(chatId);
+    public boolean isHost(ChatRef chat, String userName) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby == null) return false;
         String hostName = lobby.getHost().getUserName();
         return hostName != null && hostName.equalsIgnoreCase(userName);
     }
 
-    public boolean isBanned(Long chatId, Leader leader) {
-        Lobby lobby = lobbies.get(chatId);
+    public boolean isBanned(ChatRef chat, Leader leader) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         return lobby != null && lobby.getBannedLeaders().contains(leader);
     }
 
-    public boolean hasAvailableBans(Long chatId, Player player) {
-        Lobby lobby = lobbies.get(chatId);
+    public boolean hasAvailableBans(ChatRef chat, Player player) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         return lobby != null && lobby.getBanSize() > player.getBans().size();
     }
 
-    public List<Leader> bannedLeaders(Long chatId) {
-        Lobby lobby = lobbies.get(chatId);
+    public List<Leader> bannedLeaders(ChatRef chat) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         return lobby == null ? Collections.emptyList() : lobby.getBannedLeaders();
     }
 
-    public Player findPlayerByName(Long chatId, String userName) {
-        Lobby lobby = lobbies.get(chatId);
+    public Player findPlayerByName(ChatRef chat, String userName) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby == null || lobby.getPlayers() == null) return null;
         return lobby.getPlayers().stream()
                 .filter(p -> p.getUserName().equalsIgnoreCase(userName))
@@ -113,16 +141,16 @@ public class LobbyService {
      * be routed — including a "you've already submitted" nudge once they have), or null. If somehow
      * several qualify, the most recently started wins.
      */
-    public Long findHersonChatIdForUser(String userName, Long userId) {
-        Long best = null;
+    public ChatRef findHersonChatForUser(String userName, String userId) {
+        ChatRef best = null;
         LocalDateTime bestStarted = null;
-        for (Map.Entry<Long, Lobby> e : lobbies.entrySet()) {
+        for (Map.Entry<ChatRef, Lobby> e : lobbies.entrySet()) {
             Lobby lobby = e.getValue();
             if (!lobby.isHersonDraft()) continue;
             if (!lobby.isDraftInProgress() || lobby.getHersonState() == null) continue;
             Player player = lobby.getPlayers().stream()
                     .filter(p -> (userName != null && userName.equalsIgnoreCase(p.getUserName()))
-                            || (userId != null && userId.equals(p.getUserId())))
+                            || (userId != null && userId.equals(p.getUser().id())))
                     .findFirst().orElse(null);
             if (player == null) continue;
             // Stage is null only for someone who joined after the prompts went out — nothing to route.
@@ -136,36 +164,36 @@ public class LobbyService {
         return best;
     }
 
-    public List<CivMap> getMappool(Long chatId) {
-        Lobby lobby = lobbies.get(chatId);
+    public List<CivMap> getMappool(ChatRef chat) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         return lobby == null ? null : lobby.getMapPool();
     }
 
-    public boolean addMap(Long chatId, CivMap civMap) {
-        Lobby lobby = lobbies.get(chatId);
+    public boolean addMap(ChatRef chat, CivMap civMap) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         return lobby != null && lobby.addMap(civMap);
     }
 
-    public void clearAllBans(Long chatId) {
-        Lobby lobby = lobbies.get(chatId);
+    public void clearAllBans(ChatRef chat) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby != null) lobby.clearAllBans();
     }
 
-    public boolean removeMap(Long chatId, CivMap civMap) {
-        Lobby lobby = lobbies.get(chatId);
+    public boolean removeMap(ChatRef chat, CivMap civMap) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         return lobby != null && lobby.removeMap(civMap);
     }
 
-    public List<Player> randomSlotOrder(Long chatId) {
-        Lobby lobby = lobbies.get(chatId);
+    public List<Player> randomSlotOrder(ChatRef chat) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby == null) return Collections.emptyList();
         List<Player> shuffled = new ArrayList<>(lobby.getPlayers());
         Collections.shuffle(shuffled);
         return shuffled;
     }
 
-    public CivMap randomMap(Long chatId) {
-        Lobby lobby = lobbies.get(chatId);
+    public CivMap randomMap(ChatRef chat) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby == null) return null;
         List<CivMap> mapPool = lobby.getMapPool();
         if (mapPool.isEmpty()) return null;
@@ -177,8 +205,8 @@ public class LobbyService {
      * Fix a random map from the current pool as the lobby's selected map (null if the pool is empty).
      * Rolled up front — before bans/picks — so players know the map while they draft.
      */
-    public CivMap rollMap(Long chatId) {
-        Lobby lobby = lobbies.get(chatId);
+    public CivMap rollMap(ChatRef chat) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby == null) return null;
         List<CivMap> pool = lobby.getMapPool();
         // Pick without shuffling the pool in place, so its displayed order stays stable.
@@ -192,12 +220,12 @@ public class LobbyService {
      * roll a fresh one only if none is set yet or the current pick was removed from the pool.
      * Leaves an already-valid selection untouched so adding/removing other maps doesn't reshuffle it.
      */
-    public void ensureSelectedMap(Long chatId) {
-        Lobby lobby = lobbies.get(chatId);
+    public void ensureSelectedMap(ChatRef chat) {
+        Lobby lobby = lobbies.get(chat.channelKey());
         if (lobby == null || lobby.isDraftStarted()) return;
         CivMap current = lobby.getSelectedMap();
         if (current == null || !lobby.getMapPool().contains(current)) {
-            rollMap(chatId);
+            rollMap(chat);
         }
     }
 }

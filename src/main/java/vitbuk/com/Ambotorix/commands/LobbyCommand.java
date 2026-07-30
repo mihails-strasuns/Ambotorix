@@ -1,8 +1,8 @@
 package vitbuk.com.Ambotorix.commands;
 
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.objects.Update;
 import vitbuk.com.Ambotorix.commands.structure.GeneralCommand;
+import vitbuk.com.Ambotorix.commands.structure.CommandContext;
 import vitbuk.com.Ambotorix.commands.structure.CommandInfo;
 import vitbuk.com.Ambotorix.services.AmbotorixService;
 
@@ -18,9 +18,7 @@ public class LobbyCommand implements GeneralCommand {
     }
 
     @Override
-    public void execute(Update update, AmbotorixService ambotorixService) {
-        String[] parts = update.getMessage().getText().trim().split("\\s+", 2);
-        String draftName = parts.length > 1 ? parts[1].trim() : null;
-        ambotorixService.sendLobby(update, draftName);
+    public void execute(CommandContext ctx, AmbotorixService service) {
+        service.sendLobby(ctx, ctx.args().isEmpty() ? null : ctx.args());
     }
 }

@@ -1,13 +1,12 @@
 package vitbuk.com.Ambotorix;
 
-import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
-import org.telegram.telegrambots.meta.api.objects.InputFile;
 import vitbuk.com.Ambotorix.entities.Leader;
 import vitbuk.com.Ambotorix.entities.Player;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -18,6 +17,9 @@ import java.util.List;
  * with the player's name at the row start, a portrait + wrapped name per leader, and a thin separator
  * between rows. The same renderer serves the public open-draft post (all players) and the per-player
  * DM pools (a single row).
+ *
+ * <p>Produces raw PNG bytes and knows nothing about how they are delivered — the chat adapter wraps
+ * them in whatever its platform needs (a Telegram {@code SendPhoto}, a Discord {@code FileUpload}).
  */
 public class PickImageGenerator {
 
@@ -38,7 +40,7 @@ public class PickImageGenerator {
     private static final Color SEPARATOR = new Color(0xE0, 0xE0, 0xE0);
     private static final Color NAME_COLOR = new Color(0x22, 0x22, 0x22);
 
-    private static File generatePickImage(List<Player> players) {
+    private static byte[] generatePickImage(List<Player> players) {
         int maxPicks = players.stream().mapToInt(p -> p.getPicks().size()).max().orElse(0);
         int rowContentHeight = ICON_SIZE + LEADER_TEXT_GAP + LEADER_TEXT_ROWS * LEADER_LINE_HEIGHT;
         int rowHeight = ROW_VPAD + rowContentHeight + ROW_VPAD;
@@ -93,15 +95,13 @@ public class PickImageGenerator {
 
         g.dispose();
 
-        // temporary file which will be deleted once it has been sent
-        File outputFile;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
-            outputFile = File.createTempFile("leader_picks_", ".png");
-            ImageIO.write(finalImage, "png", outputFile);
+            ImageIO.write(finalImage, "png", out);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
-        return outputFile;
+        return out.toByteArray();
     }
 
     /** Draw the player's name centred in the left column, wrapped to a few lines, vertically centred. */
@@ -180,23 +180,13 @@ public class PickImageGenerator {
         g.drawString(text, startX, y);
     }
 
-    public record LeaderPickPhoto(SendPhoto sendPhoto, File tempFile) {}
-
     /** A single player's pool (one row) — used for DMs. */
-    public static LeaderPickPhoto createLeaderPickMessage(Long chatId, Player player) {
-        return photoOf(chatId, generatePickImage(List.of(player)));
+    public static byte[] renderPool(Player player) {
+        return generatePickImage(List.of(player));
     }
 
     /** Every player's pool in one image (one row each) — used for the public open-draft post. */
-    public static LeaderPickPhoto createCombinedPickMessage(Long chatId, List<Player> players) {
-        return photoOf(chatId, generatePickImage(players));
-    }
-
-    private static LeaderPickPhoto photoOf(Long chatId, File imageFile) {
-        SendPhoto sp = SendPhoto.builder()
-                .chatId(chatId)
-                .photo(new InputFile(imageFile))
-                .build();
-        return new LeaderPickPhoto(sp, imageFile);
+    public static byte[] renderPools(List<Player> players) {
+        return generatePickImage(players);
     }
 }

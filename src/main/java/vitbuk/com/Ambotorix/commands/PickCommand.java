@@ -1,7 +1,7 @@
 package vitbuk.com.Ambotorix.commands;
 
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.objects.Update;
+import vitbuk.com.Ambotorix.commands.structure.CommandContext;
 import vitbuk.com.Ambotorix.commands.structure.CommandInfo;
 import vitbuk.com.Ambotorix.commands.structure.DynamicCommand;
 import vitbuk.com.Ambotorix.commands.structure.PlayerCommand;
@@ -15,8 +15,7 @@ public class PickCommand implements PlayerCommand, DynamicCommand {
     @Override public CommandInfo getInfo() { return INFO; }
 
     @Override
-    public void execute(Update update, AmbotorixService service) {
-        String[] parts = update.getMessage().getText().trim().split("[\\s_]+", 2);
-        service.sendPick(update, update.getMessage().getChatId(), parts[1].trim());
+    public void execute(CommandContext ctx, AmbotorixService service) {
+        service.sendPick(ctx.event(), ctx.chat(), ctx.args());
     }
 }

@@ -1,7 +1,7 @@
 package vitbuk.com.Ambotorix.commands;
 
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.objects.Update;
+import vitbuk.com.Ambotorix.commands.structure.CommandContext;
 import vitbuk.com.Ambotorix.commands.structure.CommandInfo;
 import vitbuk.com.Ambotorix.commands.structure.HostCommand;
 import vitbuk.com.Ambotorix.services.AmbotorixService;
@@ -18,7 +18,7 @@ public class StartCommand implements HostCommand {
     }
 
     @Override
-    public void execute(Update update, AmbotorixService ambotorixService) {
-        ambotorixService.sendStart(update);
+    public void execute(CommandContext ctx, AmbotorixService service) {
+        service.sendStart(ctx);
     }
 }

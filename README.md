@@ -112,6 +112,51 @@ The bot is containerised. With Docker and a populated `.env` (bot token, usernam
 docker compose up --build -d
 ```
 
+### Running on Discord too
+
+The bot speaks Telegram and Discord from one process, with one copy of the lobby/draft logic. Each
+adapter is independently optional — set `bot.token` for Telegram, `discord.token` for Discord, or both.
+An unconfigured platform's adapter simply isn't created; with neither set the bot refuses to start
+rather than running mute.
+
+In Docker these go in `.env` alongside the Telegram ones (Spring maps the env var names onto the
+property names automatically):
+
+```bash
+DISCORD_TOKEN=...            # enables the Discord adapter
+BOT_DISCORD_ADMIN_ID=...     # admin rights are per platform; a Telegram admin id means nothing on Discord
+DISCORD_GUILD_ID=...         # optional: register commands to one server, instantly (see below)
+```
+
+Running without Docker, the same three as properties in `src/main/resources/application.properties`:
+
+```properties
+discord.token=...
+bot.discord-admin-id=...
+discord.guild-id=...
+```
+
+After editing `.env`, use `docker compose up -d` — `docker compose restart` reuses the old
+environment and your change will appear to have no effect.
+
+**Commands not showing up?** Global slash-command registration can take Discord up to an hour to
+propagate, and until it does, typing `/lobby` just sends a plain message and the bot looks dead. Set
+`discord.guild-id` to your server's id (Developer Mode on → right-click the server → Copy Server ID)
+and commands register to that server immediately. Leave it unset for a real deployment.
+
+Set up the application at <https://discord.com/developers/applications>, then invite the bot with the
+`bot` and `applications.commands` scopes and these permissions: **Send Messages**, **Embed Links**,
+**Attach Files**, **Read Message History**. No privileged intents are required — commands arrive as
+slash-command interactions, and Discord always delivers message content in DMs (which is how Herson
+ranked picks are submitted).
+
+Commands register themselves as slash commands on startup, so `/lobby`, `/register`, `/ban …` behave
+the same on both platforms. Two things look different because the platforms differ, not the logic:
+the lobby status is a Discord embed, and the 89-leader pick grid becomes grouped dropdown menus
+(Discord caps a message at 25 buttons).
+
+Lobbies never span platforms — a Telegram group and a Discord channel each host their own.
+
 ### Updating data files (`mods`, `settings`, etc.) on an existing deployment
 
 `src/main/resources` is a named Docker volume that the entrypoint **only seeds on first run**

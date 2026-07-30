@@ -1,58 +1,48 @@
 package vitbuk.com.Ambotorix.draft;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
-import org.telegram.telegrambots.meta.generics.TelegramClient;
 import vitbuk.com.Ambotorix.PickImageGenerator;
+import vitbuk.com.Ambotorix.chat.Attachment;
+import vitbuk.com.Ambotorix.chat.ChatGatewayRegistry;
+import vitbuk.com.Ambotorix.chat.OutgoingMessage;
+import vitbuk.com.Ambotorix.chat.ChatRef;
 import vitbuk.com.Ambotorix.entities.Lobby;
 import vitbuk.com.Ambotorix.entities.Player;
 import vitbuk.com.Ambotorix.services.AmbotorixService;
 import vitbuk.com.Ambotorix.services.LeaderService;
-import vitbuk.com.Ambotorix.services.MarkupService;
+import vitbuk.com.Ambotorix.view.PickPoolView;
 
 @Component
 public class SecretDraftStrategy implements DraftStrategy {
 
-    private static final Logger log = LoggerFactory.getLogger(SecretDraftStrategy.class);
     private final LeaderService leaderService;
-    private final MarkupService markupService;
-    private final TelegramClient telegramClient;
+    private final PickPoolView pickPoolView;
+    private final ChatGatewayRegistry chat;
 
-    public SecretDraftStrategy(LeaderService leaderService, MarkupService markupService, TelegramClient telegramClient) {
+    public SecretDraftStrategy(LeaderService leaderService, PickPoolView pickPoolView, ChatGatewayRegistry chat) {
         this.leaderService = leaderService;
-        this.markupService = markupService;
-        this.telegramClient = telegramClient;
+        this.pickPoolView = pickPoolView;
+        this.chat = chat;
     }
 
     @Override
     public String getName() { return "secret"; }
 
     @Override
-    public void execute(Lobby lobby, Long chatId, AmbotorixService service) {
+    public void execute(Lobby lobby, ChatRef chatId, AmbotorixService service) {
         leaderService.setLeadersPool(lobby);
         String mapLine = lobby.getSelectedMap() != null
                 ? "🗺 Map: " + lobby.getSelectedMap() + "\n\n"
                 : "";
         for (Player player : lobby.getPlayers()) {
-            Long userId = player.getUserId();
-            if (userId == null) {
-                service.sendToChat(chatId, lobby.getMessageThreadId(),
+            boolean delivered = chat.send(OutgoingMessage.to(player.getUser())
+                    .text(mapLine + "Your leaders — tap to pick one:")
+                    .attachment(Attachment.png("picks.png", PickImageGenerator.renderPool(player)))
+                    .component(pickPoolView.chooser(player.getPicks(), lobby.getToken()))
+                    .build()).isPresent();
+            if (!delivered) {
+                service.sendToChat(lobby.getChat(),
                         "@" + player.getUserName() + " — couldn't send DM. Please message the bot directly first, then use <code>/pick [shortName]</code> in this chat.");
-                continue;
-            }
-            PickImageGenerator.LeaderPickPhoto result = PickImageGenerator.createLeaderPickMessage(userId, player);
-            result.sendPhoto().setReplyMarkup(markupService.pickMarkup(player.getPicks(), chatId));
-            result.sendPhoto().setCaption(mapLine + "Your leaders — tap to pick one:");
-            try {
-                telegramClient.execute(result.sendPhoto());
-            } catch (TelegramApiException e) {
-                log.warn("Failed to DM player {} (userId={}): {}", player.getUserName(), userId, e.getMessage());
-                service.sendToChat(chatId, lobby.getMessageThreadId(),
-                        "@" + player.getUserName() + " — couldn't send DM. Please message the bot directly first, then use <code>/pick [shortName]</code> in this chat.");
-            } finally {
-                result.tempFile().delete();
             }
         }
         // Pick pools went out as DMs; pick progress is tracked silently in the live status message.
@@ -61,7 +51,7 @@ public class SecretDraftStrategy implements DraftStrategy {
     }
 
     @Override
-    public void onAllPicksIn(Lobby lobby, Long chatId, AmbotorixService service) {
+    public void onAllPicksIn(Lobby lobby, ChatRef chatId, AmbotorixService service) {
         // The final picks are revealed in the status message; the milestone mention just pings + backlinks.
         service.refreshStatus(chatId);
         service.postMilestone(chatId, "🎉 All picks are in! See the reveal ☝️");

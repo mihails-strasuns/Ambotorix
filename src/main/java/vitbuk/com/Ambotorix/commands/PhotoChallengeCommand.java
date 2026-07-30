@@ -1,7 +1,7 @@
 package vitbuk.com.Ambotorix.commands;
 
 import org.springframework.stereotype.Component;
-import org.telegram.telegrambots.meta.api.objects.Update;
+import vitbuk.com.Ambotorix.commands.structure.CommandContext;
 import vitbuk.com.Ambotorix.commands.structure.CommandInfo;
 import vitbuk.com.Ambotorix.commands.structure.GeneralCommand;
 import vitbuk.com.Ambotorix.services.AmbotorixService;
@@ -19,7 +19,7 @@ public class PhotoChallengeCommand implements GeneralCommand {
     }
 
     @Override
-    public void execute(Update update, AmbotorixService ambotorixService) {
-        ambotorixService.sendPhotoChallenge(update);
+    public void execute(CommandContext ctx, AmbotorixService service) {
+        service.sendPhotoChallenge(ctx);
     }
 }

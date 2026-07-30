@@ -1,6 +1,7 @@
 package vitbuk.com.Ambotorix.draft;
 
 import org.junit.jupiter.api.Test;
+import vitbuk.com.Ambotorix.chat.ChatRef;
 import vitbuk.com.Ambotorix.entities.Lobby;
 import vitbuk.com.Ambotorix.services.AmbotorixService;
 
@@ -14,7 +15,7 @@ class DraftStrategyFactoryTest {
     private DraftStrategy stub(String name) {
         return new DraftStrategy() {
             @Override public String getName() { return name; }
-            @Override public void execute(Lobby lobby, Long chatId, AmbotorixService service) {}
+            @Override public void execute(Lobby lobby, ChatRef chatId, AmbotorixService service) {}
         };
     }
 

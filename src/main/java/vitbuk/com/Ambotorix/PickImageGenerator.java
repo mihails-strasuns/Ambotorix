@@ -5,6 +5,8 @@ import vitbuk.com.Ambotorix.entities.Player;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -36,9 +38,26 @@ public class PickImageGenerator {
     private static final int LEADER_TEXT_GAP = 6;   // gap between a portrait and its name
     private static final int LEADER_TEXT_WIDTH = ICON_SIZE + 8; // slightly wider than the icon
 
-    private static final Color BACKGROUND = Color.WHITE;
-    private static final Color SEPARATOR = new Color(0xE0, 0xE0, 0xE0);
-    private static final Color NAME_COLOR = new Color(0x22, 0x22, 0x22);
+    // ---- Theme: simple but stylish, dark "gaming" palette. ----
+    private static final int OUTER_PAD = 16;        // margin around the whole image
+    private static final int PANEL_GAP = 12;        // vertical gap between player panels
+    private static final int PANEL_RADIUS = 18;     // corner radius of each player's panel
+    private static final int ACCENT_BAR_W = 5;      // colored bar on the panel's left edge
+    private static final int RING = 2;              // accent ring thickness around portraits
+
+    private static final Color BG_TOP = new Color(0x1B, 0x1F, 0x2A);      // gradient top
+    private static final Color BG_BOTTOM = new Color(0x12, 0x15, 0x1D);   // gradient bottom
+    private static final Color PANEL = new Color(0xFF, 0xFF, 0xFF, 0x0E); // translucent panel fill
+    private static final Color PANEL_STROKE = new Color(0xFF, 0xFF, 0xFF, 0x14);
+    private static final Color NAME_COLOR = new Color(0xF2, 0xF4, 0xF8);
+    private static final Color LEADER_COLOR = new Color(0xAD, 0xB4, 0xC2);
+
+    // Two rotating accent colors, alternated per row purely for visual rhythm
+    // (no encoded meaning — just so adjacent panels read as distinct).
+    private static final Color[] ACCENTS = {
+            new Color(0x4C, 0x9A, 0xFF), // blue
+            new Color(0x36, 0xC7, 0x9B), // teal
+    };
 
     private static byte[] generatePickImage(List<Player> players) {
         int maxPicks = players.stream().mapToInt(p -> p.getPicks().size()).max().orElse(0);
@@ -48,28 +67,49 @@ public class PickImageGenerator {
         int width = LEFT_PAD + NAME_COL_WIDTH + maxPicks * (ICON_SIZE + ICON_GAP) + RIGHT_PAD;
         int height = Math.max(1, players.size()) * rowHeight;
 
+        // Include outer margins and gaps between panels in the canvas size.
+        int panelWidth = width;
+        width = panelWidth + OUTER_PAD * 2;
+        height = OUTER_PAD * 2 + players.size() * rowHeight
+                + Math.max(0, players.size() - 1) * PANEL_GAP;
+
         BufferedImage finalImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = finalImage.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        g.setColor(BACKGROUND);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+
+        // Backdrop: subtle vertical gradient.
+        g.setPaint(new GradientPaint(0, 0, BG_TOP, 0, height, BG_BOTTOM));
         g.fillRect(0, 0, width, height);
 
-        int rowTop = 0;
-        boolean first = true;
+        int rowTop = OUTER_PAD;
+        int accentIdx = 0;
         for (Player player : players) {
-            if (!first) {
-                g.setColor(SEPARATOR);
-                g.drawLine(LEFT_PAD, rowTop, width - RIGHT_PAD, rowTop);
-            }
-            first = false;
+            Color accent = ACCENTS[accentIdx++ % ACCENTS.length];
+
+            // Rounded translucent panel for the whole row, with a left accent bar.
+            RoundRectangle2D panel = new RoundRectangle2D.Float(
+                    OUTER_PAD, rowTop, panelWidth, rowHeight, PANEL_RADIUS, PANEL_RADIUS);
+            g.setColor(PANEL);
+            g.fill(panel);
+            Shape oldClip = g.getClip();
+            g.setClip(panel);
+            g.setColor(accent);
+            g.fillRect(OUTER_PAD, rowTop, ACCENT_BAR_W, rowHeight);
+            g.setClip(oldClip);
+            g.setColor(PANEL_STROKE);
+            g.setStroke(new BasicStroke(1f));
+            g.draw(panel);
 
             // Player name in the left column, bold and vertically centred in the row.
             g.setFont(new Font("Verdana", Font.BOLD, 14));
             g.setColor(NAME_COLOR);
-            drawPlayerName(g, player.getUserName(), LEFT_PAD, rowTop, NAME_COL_WIDTH - 8, rowHeight);
+            int nameX = OUTER_PAD + LEFT_PAD + ACCENT_BAR_W;
+            drawPlayerName(g, player.getUserName(), nameX, rowTop, NAME_COL_WIDTH - 8, rowHeight);
 
-            int x = LEFT_PAD + NAME_COL_WIDTH;
+            int x = OUTER_PAD + LEFT_PAD + NAME_COL_WIDTH;
             int iconY = rowTop + ROW_VPAD;
             for (Leader leader : player.getPicks()) {
                 BufferedImage leaderIcon;
@@ -78,11 +118,10 @@ public class PickImageGenerator {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-                Image scaledIcon = leaderIcon.getScaledInstance(ICON_SIZE, ICON_SIZE, Image.SCALE_SMOOTH);
-                g.drawImage(scaledIcon, x, iconY, null);
+                drawCircularPortrait(g, leaderIcon, x, iconY, ICON_SIZE, accent);
 
                 g.setFont(new Font("Verdana", Font.PLAIN, LEADER_FONT_SIZE));
-                g.setColor(Color.BLACK);
+                g.setColor(LEADER_COLOR);
                 int textStartY = iconY + ICON_SIZE + LEADER_TEXT_GAP + g.getFontMetrics().getAscent();
                 // Centre the (slightly wider) name block on the portrait's centre.
                 int textX = x - (LEADER_TEXT_WIDTH - ICON_SIZE) / 2;
@@ -90,7 +129,7 @@ public class PickImageGenerator {
 
                 x += ICON_SIZE + ICON_GAP;
             }
-            rowTop += rowHeight;
+            rowTop += rowHeight + PANEL_GAP;
         }
 
         g.dispose();
@@ -102,6 +141,19 @@ public class PickImageGenerator {
             throw new RuntimeException(e);
         }
         return out.toByteArray();
+    }
+
+    /** Draw a portrait clipped to a circle with a subtle accent ring. */
+    private static void drawCircularPortrait(Graphics2D g, BufferedImage src, int x, int y, int size, Color accent) {
+        Image scaled = src.getScaledInstance(size, size, Image.SCALE_SMOOTH);
+        Shape oldClip = g.getClip();
+        g.setClip(new Ellipse2D.Float(x, y, size, size));
+        g.drawImage(scaled, x, y, null);
+        g.setClip(oldClip);
+        // Accent ring.
+        g.setStroke(new BasicStroke(RING));
+        g.setColor(accent);
+        g.drawOval(x + RING / 2, y + RING / 2, size - RING, size - RING);
     }
 
     /** Draw the player's name centred in the left column, wrapped to a few lines, vertically centred. */

@@ -49,3 +49,5 @@ src/main/resources/bbg_version.txt
 
 # Docker local overrides
 docker-compose.override.yml
+# throwaway render harness for card-design work
+scratch/
